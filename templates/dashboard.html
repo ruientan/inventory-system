@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <a href="{{ url_for('manage_products') }}" class="btn btn-primary">📋 Manage Products</a>
   {% endif %}
   {% if role in ['Mbella', 'Citibella'] %}
-    <a href="{{ url_for('use_product') }}" class="btn btn-outline-warning">➕ Log Product Usage</a>
+    <a href="{{ url_for('use_product') }}" class="btn btn-primary">➕ Log Product Usage</a>
   {% endif %}
 </div>
 
