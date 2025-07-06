@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>👤 User Profile</h2>
+
+    {% if session['username'] %}
+        <div class="card mt-3 p-3 shadow-sm">
+            <p><strong>Username:</strong> {{ session['username'] }}</p>
+            <p><strong>Role:</strong> {{ session['role'] }}</p>
+        </div>
+
+        <form action="{{ url_for('logout') }}" method="POST">
+            <button type="submit" class="btn btn-danger">Logout</button>
+        </form>
+
+    {% else %}
+        <div class="alert alert-warning mt-3">You are not logged in.</div>
+    {% endif %}
+
+    <a href="/" class="btn btn-outline-secondary mt-3">← Back to Dashboard</a>
+</div>
+{% endblock %}

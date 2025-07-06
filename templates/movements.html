@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>📦 Stock Movement History</h2>
+
+    <!-- 🔍 Filter Form -->
+    <form method="get" class="row g-3 align-items-end mb-3">
+        <div class="col-md-4">
+            <label class="form-label">Search Product:</label>
+            <input type="text" name="product_search" value="{{ product_search or '' }}" class="form-control">
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">Start Date:</label>
+            <input type="date" name="start_date" value="{{ start_date or '' }}" class="form-control">
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">End Date:</label>
+            <input type="date" name="end_date" value="{{ end_date or '' }}" class="form-control">
+        </div>
+
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">🔍 Filter</button>
+        </div>
+    </form>
+
+    <div class="mb-3">
+        <a href="{{ url_for('export_movements', product_search=product_search, start_date=start_date, end_date=end_date) }}" class="btn btn-success">
+            ⬇️ Export to CSV
+        </a>
+        <a href="{{ url_for('export_transaction_history') }}" class="btn btn-outline-success">
+        📤 Export Transactions
+        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary ms-2">← Back to Dashboard</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Movement ID</th>
+                    <th>Invoice No.</th>
+                    <th>Product</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Quantity</th>
+                    <th>Moved By</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in movements %}
+                <tr>
+                    <td>{{ 'MV-%04d' | format(m.id) }}</td>
+                    <td>{{ m.invoice_number or '—' }}</td>
+                    <td>{{ m.product_name }}</td>
+                    <td>{{ m.from_location }}</td>
+                    <td>{{ m.to_location }}</td>
+                    <td>{{ m.quantity }}</td>
+                    <td>{{ m.moved_by }}</td>
+                    <td>{{ m.timestamp.strftime('%d/%m/%Y') if m.timestamp else '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+

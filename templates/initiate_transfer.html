@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>🚚 Initiate Stock Transfer</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label">To Branch:</label>
+            <select name="to_location" class="form-select" required>
+                {% for branch in branches %}
+                    <option value="{{ branch.location_id }}">{{ branch.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="product-section">
+            <div class="product-entry mb-3 row">
+                <div class="col-md-6">
+                    <label>Product:</label>
+                    <select name="product_id[]" class="form-select" required>
+                        {% for product in products %}
+                            <option value="{{ product.product_id }}">{{ product.product_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label>Quantity:</label>
+                    <input type="number" name="quantity[]" class="form-control" required>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3" onclick="addProductEntry()">➕ Add Another Product</button>
+
+        <br>
+        <button type="submit" class="btn btn-primary">📤 Submit & Generate Invoice</button>
+        <a href="/" class="btn btn-outline-secondary">← Back</a>
+    </form>
+</div>
+
+<script>
+    function addProductEntry() {
+        const section = document.getElementById("product-section");
+        const newEntry = section.firstElementChild.cloneNode(true);
+        newEntry.querySelectorAll("input").forEach(input => input.value = '');
+        section.appendChild(newEntry);
+    }
+</script>
+{% endblock %}

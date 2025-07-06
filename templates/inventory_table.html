@@ -1,0 +1,28 @@
+<table class="table table-bordered table-striped">
+    <thead class="table-dark">
+        <tr>
+            <th>Product</th>
+            <th>Location</th>
+            <th>Quantity</th>
+            <th>Reorder Level</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in inventory %}
+        <tr class="{% if row.is_low_stock %}table-warning{% endif %}">
+            <td>{{ row.product_name }}</td>
+            <td>{{ row.location_name }}</td>
+            <td>{{ row.quantity }}</td>
+            <td>{{ row.reorder_level }}</td>
+            <td>
+                {% if row.is_low_stock %}
+                    ⚠️ Low Stock
+                {% else %}
+                    ✅ OK
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

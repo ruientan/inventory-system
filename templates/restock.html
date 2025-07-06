@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<div class="container mt-4">
+    <h2>➕ Restock</h2>
+
+    {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label">Product:</label>
+            <select id="product-select" name="product_id" class="form-select" required>
+                {% for p in products %}
+                <option value="{{ p.product_id }}">{{ p.product_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Location:</label>
+            <select name="location_id" class="form-select" required>
+                {% for l in locations %}
+                <option value="{{ l.location_id }}">{{ l.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Quantity:</label>
+            <input type="number" name="quantity" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Added By:</label>
+            <input type="text" name="moved_by" class="form-control" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary">➕ Restock</button>
+    </form>
+
+    <a href="/" class="btn btn-y2k-outline mt-3">← Back to Dashboard</a>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#product-select').select2({
+        placeholder: "Search for a product...",
+        allowClear: true
+    });
+});
+</script>
+{% endblock %}

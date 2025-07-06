@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>📄 Transaction History for {{ session['role'] }}</h3>
+        <a href="{{ url_for('export_transaction_history') }}" class="btn btn-success">
+            📤 Export to Excel
+        </a>
+    </div>
+
+    {% if transactions %}
+    <table class="table table-bordered table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Invoice</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Initiated By</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in transactions %}
+            <tr>
+                <td><strong>{{ t.invoice_number }}</strong></td>
+                <td>{{ t.from_location }}</td>
+                <td>{{ t.to_location }}</td>
+                <td>{{ t.items|safe }}</td>
+                <td>
+                    {% if t.status == 'Received' %}
+                        ✅ Received
+                    {% elif t.status == 'Delivered' %}
+                        📦 Delivered
+                    {% elif t.status == 'Sent Out' %}
+                        🚚 Sent Out
+                        {% if session['role'] in ['Mbella', 'Citibella'] %}
+                            <form action="{{ url_for('mark_delivered', transaction_id=t.transaction_id) }}" method="post" class="d-inline ms-2">
+                                <button type="submit" class="btn btn-sm btn-outline-success">✅ Confirm Delivered</button>
+                            </form>
+                        {% endif %}
+                    {% elif t.status == 'Preparing' %}
+                        ⏳ Preparing
+                        {% if session['role'] == 'HQ' %}
+                            <form action="{{ url_for('mark_sent_out', transaction_id=t.transaction_id) }}" method="post" class="d-inline ms-2">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">🚚 Mark as Sent Out</button>
+                            </form>
+                        {% endif %}
+                    {% elif t.status == 'Pending' %}
+                        🕒 Pending
+                    {% else %}
+                        {{ t.status }}
+                    {% endif %}
+                </td>
+
+                <td>{{ t.initiated_by }}</td>
+                <td>{{ t.created_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No transactions yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+/* === Google Fonts === */
+@import url('https://fonts.googleapis.com/css2?family=Gloock&family=Playfair+Display&display=swap');
+
+/* === Base Styles === */
+body {
+    background-color: #b9b8b8;
+    font-family: 'Gloock', serif;
+    color: #3a001d;
+    padding: 20px;
+    margin: 0;
+}
+
+/* Background override (e.g. base.html uses .bg-babypink) */
+.bg-babypink {
+    background-color: #d5d5d5 !important; /* muted lavender pink */
+}
+
+/* === Headings === */
+h1, h2, h3, h4, h5 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
+    font-size: 2.5rem;
+    color: #2e2a2c;
+    text-shadow: 1px 1px 2px #ccc;
+}
+
+/* === Links === */
+a {
+    color: #ff3366;
+    text-decoration: none;
+    font-family: 'Gloock', serif;
+}
+
+a:hover {
+    color: #7a0019;
+    text-decoration: underline;
+}
+
+/* === Buttons === */
+
+/* Primary Pink Button */
+.button, .btn-primary, .btn-y2k-primary {
+    font-family: 'Gloock', serif;
+    background-color: #f8bbe8;
+    color: #3a001d;
+    padding: 12px 24px;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 2px solid #bc4480;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px #bc4480;
+}
+
+.button:hover, .btn-primary:hover, .btn-y2k-primary:hover {
+    background-color: #7a0019;
+    color: white;
+    box-shadow: 0 0 15px #7a0019;
+}
+
+/* Outline Button (e.g. Back or Cancel) */
+.btn-y2k-outline {
+    background-color: transparent;
+    color: #7a0019;
+    border: 2px solid #7a0019;
+    font-family: 'Gloock', serif;
+    border-radius: 10px;
+    padding: 10px 20px;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+}
+
+.btn-y2k-outline:hover {
+    background-color: #ffe6f0;
+    color: white;
+    border-color: #a20035;
+    box-shadow: 0 0 10px #ff3366;
+}
+
+/* === Form Inputs === */
+.form-label {
+    font-family: 'Playfair Display', serif;
+    color: #7a0019;
+}
+
+.form-control, .form-select {
+    font-family: 'Gloock', serif;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+    transition: border-color 0.2s;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #bc4480;
+    box-shadow: 0 0 5px #f8bbe8;
+    outline: none;
+}

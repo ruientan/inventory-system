@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h3>📦 Confirm Incoming Transfers</h3>
+
+    {% if transfers %}
+    <form method="POST">
+        <label class="form-label">Select Transfer:</label>
+        <select name="transaction_id" class="form-select mb-3" required>
+            {% for t in transfers %}
+            <option value="{{ t.transaction_id }}">
+                Invoice: {{ t.invoice_number }} | Sent by: {{ t.sender }} | Date: {{ t.created_at }}
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-success">✅ Confirm Receipt</button>
+    </form>
+    {% else %}
+    <p>No pending transfers to confirm.</p>
+    {% endif %}
+
+    <a href="/" class="btn btn-outline-secondary mt-3">← Back to Dashboard</a>
+</div>
+{% endblock %}

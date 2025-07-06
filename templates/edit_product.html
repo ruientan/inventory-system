@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Edit Product{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>✏️ Edit Product</h2>
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label">Product Name:</label>
+            <input type="text" name="product_name" class="form-control" value="{{ product.product_name }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Supplier Name:</label>
+            <input type="text" name="supplier_name" class="form-control" value="{{ product.supplier_name }}">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Category:</label>
+            <input type="text" name="category" class="form-control" value="{{ product.category }}">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Unit Price (SGD):</label>
+            <input type="number" step="0.01" name="unit_price" class="form-control" value="{{ product.unit_price }}">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Quantity:</label>
+            <input type="number" name="quantity" class="form-control" value="{{ product.quantity }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Reorder Level:</label>
+            <input type="number" name="reorder_level" class="form-control" value="{{ product.reorder_level }}">
+        </div>
+
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        <a href="{{ url_for('manage_products') }}" class="btn btn-secondary">← Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# MacOS
+.DS_Store
+
+# Flask
+instance/
+*.sqlite3
+.env
+
+# Node/React frontend (optional if you're keeping it in the repo)
+frontend/node_modules/
+frontend/build/
+
+# Invoices
+static/invoices/
+
+# IDEs
+.vscode/
+.idea/

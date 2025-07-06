@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>🔁 Transfer Stock</h2>
+
+    {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% if invoice_filename %}
+            <a href="{{ url_for('download_invoice', filename=invoice_filename) }}" class="btn btn-outline-info mt-3">📄 Download Invoice</a>
+        {% endif %}
+    {% endif %}
+
+    {% if invoice_filename %}
+        <a href="{{ url_for('view_invoice', filename=invoice_filename) }}" class="btn btn-outline-primary mt-3">
+            📄 View / Print Invoice
+        </a>
+    {% endif %}
+    
+    <form method="POST" onsubmit="return validateForm()">
+
+        <div class="mb-3">
+            <label class="form-label">From Location:</label>
+            <select name="from_location" class="form-select" required>
+                {% for loc in locations %}
+                <option value="{{ loc.location_id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">To Location:</label>
+            <select name="to_location" class="form-select" required>
+                {% for loc in locations %}
+                <option value="{{ loc.location_id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="product-rows">
+            <div class="product-row row mb-2">
+                <div class="col">
+                    <input list="product_list" name="product_name[]" class="form-control" placeholder="Product Name" required>
+                </div>
+                <div class="col">
+                    <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary mb-3" onclick="addRow()">➕ Add Another Product</button>
+
+        <div class="mb-3">
+            <label class="form-label">Moved By:</label>
+            <input type="text" name="moved_by" class="form-control" required>
+        </div>
+
+        <button type="submit" class="btn btn-warning">🔁 Transfer</button>
+        <a href="/" class="btn btn-outline-secondary ms-2">← Back to Dashboard</a>
+    </form>
+
+    <datalist id="product_list">
+        {% for p in products %}
+        <option value="{{ p.product_name }}">
+        {% endfor %}
+    </datalist>
+</div>
+
+<script>
+function addRow() {
+    const row = document.createElement('div');
+    row.className = 'product-row row mb-2';
+    row.innerHTML = `
+        <div class="col">
+            <input list="product_list" name="product_name[]" class="form-control" placeholder="Product Name" required>
+        </div>
+        <div class="col">
+            <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
+        </div>
+    `;
+    document.getElementById('product-rows').appendChild(row);
+}
+
+function validateForm() {
+    const productInputs = document.querySelectorAll('input[name="product_name[]"]');
+    const productNames = [];
+
+    for (let input of productInputs) {
+        const name = input.value.trim().toLowerCase();
+        if (productNames.includes(name)) {
+            alert("⚠️ Duplicate product detected: " + input.value + ". Please remove duplicates before submitting.");
+            return false;
+        }
+        productNames.push(name);
+    }
+    return true;
+}
+
+</script>
+{% endblock %}
