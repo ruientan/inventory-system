@@ -454,6 +454,25 @@ def confirm_transfer():
             pid = item['product_id']
             qty = item['quantity']
 
+            # SAFETY CHECK: Ensure HQ has enough quantity
+            cursor.execute("""
+                SELECT quantity FROM inventory
+                WHERE product_id = %s AND location_id = 1
+            """, (pid,))
+            hq_stock = cursor.fetchone()
+
+            if not hq_stock or hq_stock['quantity'] < qty:
+                flash(f"❌ HQ does not have enough stock of Product ID {pid}.", "danger")
+                conn.rollback()
+                return redirect(url_for('confirm_transfer'))
+
+            # Subtract from HQ inventory
+            cursor.execute("""
+                UPDATE inventory
+                SET quantity = quantity - %s
+                WHERE product_id = %s AND location_id = 1
+            """, (qty, pid))
+
             # Add to branch inventory
             cursor.execute("""
                 INSERT INTO inventory (product_id, location_id, quantity)
@@ -464,8 +483,8 @@ def confirm_transfer():
             # Log movement
             cursor.execute("""
                 INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose)
-                VALUES (%s, NULL, %s, %s, %s, %s)
-            """, (pid, location_id, qty, received_by, "Confirmed Receipt"))
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (pid, 1, location_id, qty, received_by, "Confirmed Receipt"))
 
             # Log audit
             cursor.execute("SELECT product_name FROM products WHERE product_id = %s", (pid,))
@@ -476,7 +495,7 @@ def confirm_transfer():
                 action="Confirmed Transfer",
                 product_name=pname,
                 product_id=pid,
-                location=f"→ {location_name}",
+                location=f"HQ → {location_name}",
                 location_id=location_id,
                 quantity=qty,
                 session_id=session_id,
@@ -493,7 +512,7 @@ def confirm_transfer():
         """, (transaction_id,))
 
         conn.commit()
-        flash("✅ Stock successfully confirmed and added to inventory!", "success")
+        flash("✅ Stock successfully confirmed and inventory updated!", "success")
         return redirect(url_for('confirm_transfer'))
 
     cursor.close()
