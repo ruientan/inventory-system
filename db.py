@@ -1,18 +1,11 @@
 import os
 import mysql.connector
-from urllib.parse import urlparse
 
 def get_connection():
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise ValueError("❌ DATABASE_URL not set in environment variables")
-
-    parsed = urlparse(db_url)
-
     return mysql.connector.connect(
-        host=parsed.hostname,
-        port=parsed.port,
-        user=parsed.username,
-        password=parsed.password,
-        database=parsed.path.lstrip('/'),
+        host=os.environ.get("DB_HOST"),
+        port=os.environ.get("DB_PORT", 3306),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME")
     )
