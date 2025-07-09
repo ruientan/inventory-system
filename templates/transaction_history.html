@@ -55,7 +55,8 @@
                 </td>
 
                 <td>{{ t.initiated_by }}</td>
-                <td>{{ t.created_at }}</td>
+                <td>{{ t.created_at.strftime("%d %b %Y, %I:%M %p") }}</td>
+
             </tr>
         {% endfor %}
         </tbody>

@@ -21,3 +21,5 @@ static/invoices/
 # IDEs
 .vscode/
 .idea/
+
+*.db

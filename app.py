@@ -44,7 +44,7 @@ def log_audit_action(user, action, product_name=None, location=None, quantity=No
     query = """
         INSERT INTO audit_log (user, action, product_name, location, quantity,
                                product_id, location_id, session_id, ip, invoice_number, purpose, timestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     cursor.execute(query, (
         user, action, product_name, location, quantity,
@@ -67,33 +67,41 @@ def get_inventory_summary(cursor, location=None):
     location_filter = ""
 
     if location:
-        location_filter = "WHERE l.name = %s"
+        location_filter = "WHERE l.name = ?"
         params = [location]
 
-    cursor.execute(f"""
+    # Total SKUs
+    query1 = """
         SELECT COUNT(DISTINCT i.product_id) AS skus
         FROM inventory i
         JOIN locations l ON i.location_id = l.location_id
-        {location_filter}
-    """, params)
+        """ + location_filter
+    cursor.execute(query1, params)
     total_skus = cursor.fetchone()['skus'] or 0
 
-    cursor.execute(f"""
+    # Total quantity
+    query2 = """
         SELECT SUM(i.quantity) AS total_qty
         FROM inventory i
         JOIN locations l ON i.location_id = l.location_id
-        {location_filter}
-    """, params)
+        """ + location_filter
+    cursor.execute(query2, params)
     total_qty = cursor.fetchone()['total_qty'] or 0
 
-    cursor.execute(f"""
+    # Low stock items
+    low_stock_query = """
         SELECT COUNT(*) AS low
         FROM inventory i
         JOIN products p ON i.product_id = p.product_id
         JOIN locations l ON i.location_id = l.location_id
         WHERE ((i.quantity <= p.reorder_level AND p.reorder_level > 0) OR i.quantity <= 1)
-        {f"AND l.name = %s" if location else ""}
-    """, params)
+    """
+    low_stock_params = []
+    if location:
+        low_stock_query += " AND l.name = ?"
+        low_stock_params = [location]
+
+    cursor.execute(low_stock_query, low_stock_params)
     low_stock = cursor.fetchone()['low'] or 0
 
     return dict(
@@ -101,6 +109,7 @@ def get_inventory_summary(cursor, location=None):
         total_quantity=total_qty,
         low_stock_items=low_stock
     )
+
 
 
 
@@ -129,9 +138,9 @@ def get_recent_movements(cursor, limit=20, location=None):
             JOIN products p ON sm.product_id = p.product_id
             JOIN locations fl ON sm.from_location = fl.location_id
             JOIN locations tl ON sm.to_location = tl.location_id
-            WHERE fl.name = %s OR tl.name = %s
+            WHERE fl.name = ? OR tl.name = ?
             ORDER BY sm.date_moved DESC
-            LIMIT %s
+            LIMIT ?
         """
         cursor.execute(query, (location, location, limit))
     else:
@@ -143,7 +152,7 @@ def get_recent_movements(cursor, limit=20, location=None):
             JOIN locations fl ON sm.from_location = fl.location_id
             JOIN locations tl ON sm.to_location = tl.location_id
             ORDER BY sm.date_moved DESC
-            LIMIT %s
+            LIMIT ?
         """
         cursor.execute(query, (limit,))
     
@@ -229,7 +238,7 @@ def dashboard():
             FROM inventory i
             JOIN products p ON i.product_id = p.product_id
             JOIN locations l ON i.location_id = l.location_id
-            WHERE l.name = %s
+            WHERE l.name = ?
             ORDER BY p.product_name
         """, (role,))
         inventory = cursor.fetchall()
@@ -270,6 +279,19 @@ def initiate_transfer():
         product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
 
+    if not product_ids or not quantities or len(product_ids) != len(quantities):
+        flash("⚠️ Invalid product or quantity selection.", "danger")
+        return redirect(url_for('initiate_transfer'))
+
+    for pid, qty in zip(product_ids, quantities):
+        try:
+            qty_int = int(qty)
+            if qty_int <= 0:
+                raise ValueError
+        except ValueError:
+            flash(f"⚠️ Invalid quantity for product ID {pid}.", "danger")
+            return redirect(url_for('initiate_transfer'))
+
         # Generate invoice number
         suffix = 'M' if to_location == 2 else 'C'
         today_str = datetime.now().strftime('%d%m%y')
@@ -278,7 +300,7 @@ def initiate_transfer():
         # Insert stock transaction
         cursor.execute("""
             INSERT INTO stock_transactions (invoice_number, from_location_id, to_location_id, status, initiated_by)
-            VALUES (%s, %s, %s, 'Preparing', %s)
+            VALUES (?, ?, ?, 'Preparing', ?)
         """, (invoice_number, 1, to_location, moved_by))  # 1 = HQ
         transaction_id = cursor.lastrowid
 
@@ -287,7 +309,7 @@ def initiate_transfer():
         for pid, qty in zip(product_ids, quantities):
             cursor.execute("""
                 INSERT INTO transaction_items (transaction_id, product_id, quantity)
-                VALUES (%s, %s, %s)
+                VALUES (?, ?, ?)
             """, (transaction_id, pid, qty))
 
             product_name = next((p['product_name'] for p in products if str(p['product_id']) == pid), 'Unknown')
@@ -337,6 +359,21 @@ def transfer_stock():
         moved_by = session.get('username') or request.form['moved_by']
         session_id = session.get('session_id') or request.cookies.get('session')
 
+        # ✅ Validate basic input
+        if not product_names or not quantities or len(product_names) != len(quantities):
+            flash("⚠️ Please ensure all products and quantities are selected correctly.", "danger")
+            return redirect(url_for('transfer_stock'))
+
+        # ✅ Validate each quantity is a positive integer
+        for name, qty in zip(product_names, quantities):
+            try:
+                if int(qty) <= 0:
+                    flash(f"⚠️ Quantity for '{name}' must be a positive number.", "danger")
+                    return redirect(url_for('transfer_stock'))
+            except ValueError:
+                flash(f"⚠️ Invalid quantity entered for '{name}'.", "danger")
+                return redirect(url_for('transfer_stock'))
+
         if from_location == 1 and to_location in [2, 3]:
             suffix = 'M' if to_location == 2 else 'C'
             today_str = datetime.now().strftime('%d%m%y')
@@ -344,7 +381,7 @@ def transfer_stock():
 
         cursor.execute("""
             INSERT INTO stock_transactions (invoice_number, from_location_id, to_location_id, status, initiated_by)
-            VALUES (%s, %s, %s, 'Preparing', %s)
+            VALUES (?, ?, ?, 'Preparing', ?)
         """, (invoice_number, from_location, to_location, moved_by))
         transaction_id = cursor.lastrowid
 
@@ -354,13 +391,14 @@ def transfer_stock():
             quantity = int(qty)
             product = next((p for p in products if p['product_name'].lower() == name.lower()), None)
             if not product:
+                flash(f"❌ Product '{name}' not found in system.", "danger")
                 continue
 
             product_id = product['product_id']
 
             cursor.execute("""
                 INSERT INTO transaction_items (transaction_id, product_id, quantity)
-                VALUES (%s, %s, %s)
+                VALUES (?, ?, ?)
             """, (transaction_id, product_id, quantity))
 
             transferred_items.append((name, quantity))
@@ -416,8 +454,8 @@ def confirm_transfer():
     cursor = conn.cursor(dictionary=True)
     location_name = session.get('role')
 
-    # Get location_id from locations table
-    cursor.execute("SELECT location_id FROM locations WHERE name = %s", (location_name,))
+    # Get location_id
+    cursor.execute("SELECT location_id FROM locations WHERE name = ?", (location_name,))
     location = cursor.fetchone()
     if not location:
         cursor.close()
@@ -426,12 +464,11 @@ def confirm_transfer():
 
     location_id = location['location_id']
 
-    # Show all "Pending" or "Sent Out" transfers to this location
+    # Show pending transfers
     cursor.execute("""
-        SELECT st.transaction_id, st.invoice_number, st.created_at, u.username AS sender
+        SELECT st.transaction_id, st.invoice_number, st.created_at, st.initiated_by AS sender
         FROM stock_transactions st
-        JOIN users u ON st.initiated_by = u.username
-        WHERE st.to_location_id = %s AND st.status IN ('Pending', 'Sent Out')
+        WHERE st.to_location_id = ? AND st.status IN ('Pending', 'Sent Out')
         ORDER BY st.created_at DESC
     """, (location_id,))
     pending_transfers = cursor.fetchall()
@@ -440,16 +477,16 @@ def confirm_transfer():
         transaction_id = int(request.form['transaction_id'])
         received_by = session.get('username')
         session_id = session.get('session_id') or request.cookies.get('session')
+        ip = request.remote_addr or 'N/A'
 
-        # Get items in that transaction
+        # Fetch items in the transfer
         cursor.execute("""
             SELECT product_id, quantity
             FROM transaction_items
-            WHERE transaction_id = %s
+            WHERE transaction_id = ?
         """, (transaction_id,))
         items = cursor.fetchall()
 
-        # Update inventory and log movement
         for item in items:
             pid = item['product_id']
             qty = item['quantity']
@@ -457,7 +494,7 @@ def confirm_transfer():
             # SAFETY CHECK: Ensure HQ has enough quantity
             cursor.execute("""
                 SELECT quantity FROM inventory
-                WHERE product_id = %s AND location_id = 1
+                WHERE product_id = ? AND location_id = 1
             """, (pid,))
             hq_stock = cursor.fetchone()
 
@@ -466,28 +503,29 @@ def confirm_transfer():
                 conn.rollback()
                 return redirect(url_for('confirm_transfer'))
 
-            # Subtract from HQ inventory
+            # Subtract from HQ
             cursor.execute("""
                 UPDATE inventory
-                SET quantity = quantity - %s
-                WHERE product_id = %s AND location_id = 1
+                SET quantity = quantity - ?
+                WHERE product_id = ? AND location_id = 1
             """, (qty, pid))
 
-            # Add to branch inventory
+            # Add to receiving branch (SQLite UPSERT)
             cursor.execute("""
                 INSERT INTO inventory (product_id, location_id, quantity)
-                VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+                VALUES (?, ?, ?)
+                ON CONFLICT(product_id, location_id)
+                DO UPDATE SET quantity = quantity + excluded.quantity
             """, (pid, location_id, qty))
 
-            # Log movement
+            # Movement log
             cursor.execute("""
                 INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (pid, 1, location_id, qty, received_by, "Confirmed Receipt"))
 
-            # Log audit
-            cursor.execute("SELECT product_name FROM products WHERE product_id = %s", (pid,))
+            # Audit log
+            cursor.execute("SELECT product_name FROM products WHERE product_id = ?", (pid,))
             pname = cursor.fetchone()['product_name']
 
             log_audit_action(
@@ -499,16 +537,16 @@ def confirm_transfer():
                 location_id=location_id,
                 quantity=qty,
                 session_id=session_id,
-                ip=request.remote_addr,
+                ip=ip,
                 invoice_number=None,
                 purpose="Confirmed Receipt"
             )
 
-        # Update transaction status
+        # Update status
         cursor.execute("""
             UPDATE stock_transactions
             SET status = 'Received'
-            WHERE transaction_id = %s
+            WHERE transaction_id = ?
         """, (transaction_id,))
 
         conn.commit()
@@ -519,43 +557,89 @@ def confirm_transfer():
     conn.close()
     return render_template('confirm_transfer.html', transfers=pending_transfers)
 
-
 # ─────────────────── Download Invoice ───────────────────
 @app.route('/download_invoice/<filename>')
+@login_required
 def download_invoice(filename):
-    return send_from_directory('invoices', filename, as_attachment=False)
+    try:
+        return send_from_directory(
+            directory='static/invoices',  # Ensure this matches your folder structure
+            filename=filename,
+            as_attachment=False  # Set to True if you want to prompt download
+        )
+    except FileNotFoundError:
+        flash("❌ Invoice file not found.", "danger")
+        return redirect(url_for('dashboard'))
 
 # ─────────────────── HQ Mark Sent Out───────────────────
 @app.route('/mark_sent_out/<int:transaction_id>', methods=['POST'])
+@login_required
 def mark_sent_out(transaction_id):
-    if session['role'] != 'HQ':
-        return "Unauthorized", 403
+    # Only HQ staff should be allowed to mark as 'Sent Out'
+    if session.get('role') != 'HQ':
+        flash("❌ You are not authorized to perform this action.", "danger")
+        return redirect(url_for('dashboard'))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE stock_transactions SET status = 'Sent Out' WHERE transaction_id = %s", (transaction_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    flash('Transaction marked as Sent Out.', 'success')
+        cursor.execute("""
+            UPDATE stock_transactions
+            SET status = 'Sent Out',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE transaction_id = ?
+        """, (transaction_id,))
+        
+        conn.commit()
+        flash("✅ Transaction marked as 'Sent Out'.", "success")
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"❌ Failed to mark as 'Sent Out': {str(e)}", "danger")
+
+    finally:
+        cursor.close()
+        conn.close()
+
     return redirect(url_for('transaction_history'))
+
 
 # ─────────────────── Mark Delivered ───────────────────
 @app.route('/mark_delivered/<int:transaction_id>', methods=['POST'])
+@login_required
 def mark_delivered(transaction_id):
-    if session['role'] not in ['Mbella', 'Citibella']:
-        return "Unauthorized", 403
+    # Only branch staff should mark a transaction as delivered
+    role = session.get('role')
+    if role not in ['Mbella', 'Citibella']:
+        flash("❌ You are not authorized to perform this action.", "danger")
+        return redirect(url_for('dashboard'))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE stock_transactions SET status = 'Delivered' WHERE transaction_id = %s", (transaction_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    flash('Transaction marked as Delivered.', 'success')
+        # Update status and timestamp
+        cursor.execute("""
+            UPDATE stock_transactions
+            SET status = 'Delivered',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE transaction_id = ?
+        """, (transaction_id,))
+        
+        conn.commit()
+        flash("✅ Transaction marked as 'Delivered'.", "success")
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"❌ Failed to update status: {str(e)}", "danger")
+
+    finally:
+        cursor.close()
+        conn.close()
+
     return redirect(url_for('transaction_history'))
+
 
 
 # ─────────────────── Transaction History ───────────────────
@@ -569,7 +653,7 @@ def transaction_history():
     username = session.get('username')
 
     # Get location_id for current user
-    cursor.execute("SELECT location_id FROM locations WHERE name = %s", (role,))
+    cursor.execute("SELECT location_id FROM locations WHERE name = ?", (role,))
     loc = cursor.fetchone()
     if not loc:
         return "❌ Invalid location", 400
@@ -591,7 +675,7 @@ def transaction_history():
         JOIN locations tl ON st.to_location_id = tl.location_id
         JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
         JOIN products p ON ti.product_id = p.product_id
-        WHERE st.from_location_id = %s OR st.to_location_id = %s
+        WHERE st.from_location_id = ? OR st.to_location_id = ?
         GROUP BY st.transaction_id
         ORDER BY st.created_at DESC
     """, (location_id, location_id))
@@ -608,29 +692,70 @@ def export_transaction_history():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("""
-        SELECT 
-            st.invoice_number,
-            fl.name AS from_location,
-            tl.name AS to_location,
-            GROUP_CONCAT(CONCAT(p.product_name, ' (', ti.quantity, ')') SEPARATOR ', ') AS items,
-            st.status,
-            st.initiated_by,
-            st.created_at
-        FROM stock_transactions st
-        JOIN locations fl ON st.from_location_id = fl.location_id
-        JOIN locations tl ON st.to_location_id = tl.location_id
-        JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
-        JOIN products p ON ti.product_id = p.product_id
-        GROUP BY st.transaction_id
-        ORDER BY st.created_at DESC
-    """)
+    role = session.get('role')
+
+    if role in ['Mbella', 'Citibella']:
+        # Only show transactions related to their own location
+        cursor.execute("""
+            SELECT 
+                st.invoice_number,
+                fl.name AS from_location,
+                tl.name AS to_location,
+                GROUP_CONCAT(CONCAT(p.product_name, ' (', ti.quantity, ')') SEPARATOR ', ') AS items,
+                st.status,
+                st.initiated_by,
+                st.created_at
+            FROM stock_transactions st
+            JOIN locations fl ON st.from_location_id = fl.location_id
+            JOIN locations tl ON st.to_location_id = tl.location_id
+            JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
+            JOIN products p ON ti.product_id = p.product_id
+            WHERE fl.name = ? OR tl.name = ?
+            GROUP BY st.transaction_id
+            ORDER BY st.created_at DESC
+        """, (role, role))
+    else:
+        # HQ sees all
+        cursor.execute("""
+            SELECT 
+                st.invoice_number,
+                fl.name AS from_location,
+                tl.name AS to_location,
+                GROUP_CONCAT(CONCAT(p.product_name, ' (', ti.quantity, ')') SEPARATOR ', ') AS items,
+                st.status,
+                st.initiated_by,
+                st.created_at
+            FROM stock_transactions st
+            JOIN locations fl ON st.from_location_id = fl.location_id
+            JOIN locations tl ON st.to_location_id = tl.location_id
+            JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
+            JOIN products p ON ti.product_id = p.product_id
+            GROUP BY st.transaction_id
+            ORDER BY st.created_at DESC
+        """)
 
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
 
     df = pd.DataFrame(rows)
+
+    # Rename columns for Excel
+    df.rename(columns={
+        'invoice_number': 'Invoice Number',
+        'from_location': 'From',
+        'to_location': 'To',
+        'items': 'Items',
+        'status': 'Status',
+        'initiated_by': 'Initiated By',
+        'created_at': 'Date'
+    }, inplace=True)
+
+    # Format date column nicely
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d %b %Y, %I:%M %p')
+
+    # Export to Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Transaction History')
@@ -642,6 +767,7 @@ def export_transaction_history():
         as_attachment=True,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 # ─────────────────── Movement ───────────────────
 
 @app.route('/movements')
@@ -674,15 +800,15 @@ def view_movements():
 
     # Add filters dynamically
     if product_search:
-        query += " AND p.product_name LIKE %s"
+        query += " AND p.product_name LIKE ?"
         params.append(f"%{product_search}%")
 
     if start_date:
-        query += " AND sm.date_moved >= %s"
+        query += " AND sm.date_moved >= ?"
         params.append(start_date)
 
     if end_date:
-        query += " AND sm.date_moved <= %s"
+        query += " AND sm.date_moved <= ?"
         params.append(end_date)
 
     query += " ORDER BY sm.date_moved DESC"
@@ -723,16 +849,21 @@ def export_movements():
     params = []
 
     if product_search:
-        query += " AND p.product_name LIKE %s"
+        query += " AND p.product_name LIKE ?"
         params.append(f"%{product_search}%")
 
     if start_date:
-        query += " AND sm.date_moved >= %s"
+        query += " AND sm.date_moved >= ?"
         params.append(start_date)
 
     if end_date:
-        query += " AND sm.date_moved <= %s"
+        query += " AND sm.date_moved <= ?"
         params.append(end_date)
+
+    # Restrict view for non-HQ roles
+    if role not in ['HQ', 'Admin']:
+        query += " AND (fl.name = ? OR tl.name = ?)"
+        params.extend([role, role])
 
     query += " ORDER BY sm.date_moved DESC"
 
@@ -762,56 +893,70 @@ def export_movements():
 
 # ─────────────────── Product UI ───────────────────
 @app.route('/add_product', methods=['GET', 'POST'])
+@login_required
 def add_product():
     success = None
-    if request.method == 'POST':
-        product_name = request.form['product_name']
-        supplier_name = request.form['supplier_name']
-        category = request.form['category']
-        unit_price = request.form.get('unit_price') or 0.00
-        reorder_level = int(request.form.get('reorder_level', 0))
-        quantity = int(request.form['quantity'])
-        moved_by = request.form['moved_by']
-        hq_location_id = 1  # Adjust if your HQ location_id is different
+    error = None
 
-        session_id = session.get('session_id') or request.cookies.get('session')
-        invoice_number = None  # Not relevant for new product entry
+    if request.method == 'POST':
+        product_name   = request.form.get('product_name', '').strip()
+        supplier_name  = request.form.get('supplier_name', '').strip()
+        category       = request.form.get('category', '').strip()
+        moved_by       = request.form.get('moved_by', '').strip()
+        unit_price     = request.form.get('unit_price', '0').strip()
+        reorder_level  = request.form.get('reorder_level', '0').strip()
+        quantity       = request.form.get('quantity', '0').strip()
+        hq_location_id = 1
+        invoice_number = None  # For audit
+
+        # Basic validation
+        if not product_name or not moved_by or not quantity.isdigit():
+            error = "⚠️ Product name, quantity, and staff name are required."
+            return render_template('add_product.html', error=error)
+
+        try:
+            quantity = int(quantity)
+            reorder_level = int(reorder_level or 0)
+            unit_price = float(unit_price or 0.00)
+            if quantity < 0 or unit_price < 0:
+                raise ValueError
+        except ValueError:
+            error = "⚠️ Please enter valid numeric values for quantity and price."
+            return render_template('add_product.html', error=error)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Check if product already exists
-        cursor.execute("SELECT * FROM products WHERE product_name = %s", (product_name,))
+        # Check for duplicates
+        cursor.execute("SELECT * FROM products WHERE product_name = ?", (product_name,))
         if cursor.fetchone():
             error = f"⚠️ Product '{product_name}' already exists."
+            cursor.close()
+            conn.close()
             return render_template('add_product.html', error=error)
 
-        # 1. Insert product
+        # Insert into products
         cursor.execute("""
             INSERT INTO products (product_name, supplier_name, category, unit_price, reorder_level)
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?)
         """, (product_name, supplier_name, category, unit_price, reorder_level))
-        conn.commit()
 
-        # Get the new product_id
-        cursor.execute("SELECT LAST_INSERT_ID() AS product_id")
-        product_id = cursor.fetchone()['product_id']
+        product_id = cursor.lastrowid  # SQLite-compatible
 
-        # 2. Add initial inventory to HQ
+        # Insert into inventory (HQ)
         cursor.execute("""
             INSERT INTO inventory (product_id, location_id, quantity)
-            VALUES (%s, %s, %s)
+            VALUES (?, ?, ?)
         """, (product_id, hq_location_id, quantity))
 
-        # 3. Log movement (from NULL to HQ) with purpose
+        # Insert into stock_movements
         cursor.execute("""
             INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose, invoice_number)
-            VALUES (%s, NULL, %s, %s, %s, %s, %s)
+            VALUES (?, NULL, ?, ?, ?, ?, ?)
         """, (product_id, hq_location_id, quantity, moved_by, 'New Product', invoice_number))
 
-        conn.commit()
-
-        # 4. Audit log
+        # Audit log
+        session_id = session.get('session_id') or request.cookies.get('session')
         log_audit_action(
             user=moved_by,
             action="Added New Product",
@@ -825,21 +970,23 @@ def add_product():
             invoice_number=invoice_number
         )
 
+        conn.commit()
         cursor.close()
         conn.close()
+
         success = "✅ Product successfully added to HQ!"
 
-    return render_template('add_product.html', success=success)
-
+    return render_template('add_product.html', success=success, error=error)
 
 
 # ─────────────────── Restock ───────────────────
 @app.route('/restock', methods=['GET', 'POST'])
+@login_required
 def restock():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Fetch product and location options
+    # Fetch products and locations
     cursor.execute("SELECT product_id, product_name FROM products")
     products = cursor.fetchall()
 
@@ -847,94 +994,124 @@ def restock():
     locations = cursor.fetchall()
 
     success = None
+    error = None
 
     if request.method == 'POST':
-        product_id = request.form['product_id']
-        location_id = int(request.form['location_id'])
-        quantity = int(request.form['quantity'])
-        moved_by = request.form['moved_by']
-        session_id = session.get('session_id') or request.cookies.get('session')
-        invoice_number = None  # Not applicable for restock
+        product_id   = request.form.get('product_id')
+        location_id  = request.form.get('location_id')
+        quantity     = request.form.get('quantity', '0')
+        moved_by     = session.get('username') or request.form.get('moved_by', '').strip()
+        session_id   = session.get('session_id') or request.cookies.get('session')
+        invoice_number = None
 
-        # 1. Update inventory (add quantity to location)
-        cursor.execute("""
-            INSERT INTO inventory (product_id, location_id, quantity)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
-        """, (product_id, location_id, quantity))
+        # Basic validation
+        if not product_id or not location_id or not quantity or not moved_by:
+            error = "⚠️ All fields are required."
+        else:
+            try:
+                location_id = int(location_id)
+                quantity = int(quantity)
+                if quantity <= 0:
+                    raise ValueError("Quantity must be positive.")
+            except ValueError:
+                error = "⚠️ Quantity must be a positive number."
 
-        # 2. Log movement (from NULL to location) with purpose
-        cursor.execute("""
-            INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose, invoice_number)
-            VALUES (%s, NULL, %s, %s, %s, %s, %s)
-        """, (product_id, location_id, quantity, moved_by, 'Restock', invoice_number))
+        if not error:
+            # 1. Update or insert inventory
+            cursor.execute("""
+                INSERT INTO inventory (product_id, location_id, quantity)
+                VALUES (?, ?, ?)
+                ON CONFLICT(product_id, location_id)
+                DO UPDATE SET quantity = quantity + excluded.quantity
+            """, (product_id, location_id, quantity))
 
-        conn.commit()
+            # 2. Log stock movement
+            cursor.execute("""
+                INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose, invoice_number)
+                VALUES (?, NULL, ?, ?, ?, ?, ?)
+            """, (product_id, location_id, quantity, moved_by, 'Restock', invoice_number))
 
-        # 3. Get product and location names
-        product_name = next((p['product_name'] for p in products if str(p['product_id']) == str(product_id)), None)
-        location_name = next((l['name'] for l in locations if str(l['location_id']) == str(location_id)), None)
+            # 3. Get readable names
+            product_name = next((p['product_name'] for p in products if str(p['product_id']) == str(product_id)), 'Unknown')
+            location_name = next((l['name'] for l in locations if str(l['location_id']) == str(location_id)), 'Unknown')
 
-        # 4. Log audit
-        log_audit_action(
-            user=moved_by,
-            action="Restocked Product",
-            product_name=product_name,
-            product_id=product_id,
-            location=f"→ {location_name}",
-            location_id=location_id,
-            quantity=quantity,
-            session_id=session_id,
-            ip=request.remote_addr,
-            invoice_number=invoice_number
-        )
+            # 4. Log audit
+            log_audit_action(
+                user=moved_by,
+                action="Restocked Product",
+                product_name=product_name,
+                product_id=product_id,
+                location=f"→ {location_name}",
+                location_id=location_id,
+                quantity=quantity,
+                session_id=session_id,
+                ip=request.remote_addr,
+                invoice_number=invoice_number,
+                purpose="Restock"
+            )
 
-        success = "✅ Inventory successfully restocked!"
+            conn.commit()
+            success = f"✅ {product_name} successfully restocked at {location_name}!"
 
     cursor.close()
     conn.close()
-    return render_template('restock.html', products=products, locations=locations, success=success)
+
+    return render_template(
+        'restock.html',
+        products=products,
+        locations=locations,
+        success=success,
+        error=error
+    )
 
 # ─────────────────── Login ───────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not username or not password:
+            error = "⚠️ Please enter both username and password."
+            return render_template('login.html', error=error)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
 
+        session_id = str(uuid.uuid4())
+
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
             session['role'] = user['role']
-            session['session_id'] = str(uuid.uuid4())
+            session['session_id'] = session_id
 
             # ✅ Log successful login
             log_audit_action(
                 user=username,
                 action="Login Success",
-                session_id=session['session_id'],
+                session_id=session_id,
                 ip=request.remote_addr
             )
 
             return redirect(url_for('dashboard'))
         else:
-            error = 'Invalid username or password.'
+            error = "❌ Invalid username or password."
+
+            # ❗ Log failed login attempt
             log_audit_action(
                 user=username,
                 action="Login Failed",
-                session_id=str(uuid.uuid4()),
+                session_id=session_id,
                 ip=request.remote_addr
             )
-           
 
     return render_template('login.html', error=error)
+
  
  # ─────────────────── Log out───────────────────
 @app.route('/logout', methods=['POST'])
@@ -944,92 +1121,125 @@ def logout():
     ip = request.remote_addr
 
     # Log the logout event
-    log_audit_action(
-        user=username,
-        action="Logout",
-        session_id=session_id,
-        ip=ip
-    )
+    if username:
+        log_audit_action(
+            user=username,
+            action="Logout",
+            session_id=session_id,
+            ip=ip
+        )
 
     session.clear()
+    flash("You have been logged out.", "info")
     return redirect(url_for('login'))
+
 
 
 
 @app.route('/user')
 @login_required
 def user_profile():
-    return render_template('user.html')
+    username = session.get('username')
+    role = session.get('role')
+    return render_template('user.html', username=username, role=role)
+
 
  # ───────────────────  Manage Products (HQ Only) ───────────────────
 @app.route("/use_product", methods=["GET", "POST"])
 @login_required
 def use_product():
     role = session['role']
-
     if role not in ['HQ', 'Mbella', 'Citibella']:
         return "❌ Access Denied", 403
 
     success_msg = None
+    error_msg = None
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Load product list
+    # Load products
     cursor.execute("SELECT * FROM products ORDER BY product_name")
     products = cursor.fetchall()
 
     if request.method == 'POST' and role in ['Mbella', 'Citibella']:
-        product_id = int(request.form['product_id'])
-        quantity = int(request.form['quantity'])
-        purpose = request.form['purpose']
-        used_by = session['username']
-        session_id = session.get('session_id') or request.cookies.get('session')
-        invoice_number = None  # No invoice for usage
-        location_name = role
+        try:
+            product_id = int(request.form['product_id'])
+            quantity = int(request.form['quantity'])
+            purpose = request.form['purpose'].strip()
+            used_by = session['username']
+            session_id = session.get('session_id') or request.cookies.get('session')
+            invoice_number = None
+            location_name = role
 
-        # Get this user's location_id
-        cursor.execute("SELECT location_id FROM locations WHERE name = %s", (location_name,))
-        location_id = cursor.fetchone()['location_id']
+            # Validate inputs
+            if quantity <= 0:
+                raise ValueError("Quantity must be a positive number.")
 
-        # Deduct from inventory
-        cursor.execute("""
-            UPDATE inventory
-            SET quantity = quantity - %s
-            WHERE product_id = %s AND location_id = %s
-        """, (quantity, product_id, location_id))
+            if not purpose:
+                raise ValueError("Purpose is required.")
 
-        # Insert into stock_movements (from current location → NULL)
-        cursor.execute("""
-            INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose, invoice_number)
-            VALUES (%s, %s, NULL, %s, %s, %s, %s)
-        """, (product_id, location_id, quantity, used_by, purpose, invoice_number))
+            # Get location ID
+            cursor.execute("SELECT location_id FROM locations WHERE name = ?", (location_name,))
+            result = cursor.fetchone()
+            if not result:
+                raise ValueError("Invalid location.")
+            location_id = result['location_id']
 
-        # Log audit
-        product_name = next((p['product_name'] for p in products if p['product_id'] == product_id), "Unknown")
-        log_audit_action(
-            user=used_by,
-            action=f"Used Product ({purpose})",
-            product_name=product_name,
-            product_id=product_id,
-            location=location_name,
-            location_id=location_id,
-            quantity=quantity,
-            session_id=session_id,
-            ip=request.remote_addr,
-            invoice_number=invoice_number
-        )
+            # Check current inventory
+            cursor.execute("""
+                SELECT quantity FROM inventory
+                WHERE product_id = ? AND location_id = ?
+            """, (product_id, location_id))
+            inv = cursor.fetchone()
 
-        # Log into usage_log table too
-        cursor.execute("""
-            INSERT INTO usage_log (product_id, quantity, purpose, used_by, location)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (product_id, quantity, purpose, used_by, location_name))
+            if not inv or inv['quantity'] < quantity:
+                raise ValueError("Not enough stock available.")
 
-        conn.commit()
-        success_msg = f"✅ {quantity} x {product_name} logged as {purpose}"
+            # Deduct from inventory
+            cursor.execute("""
+                UPDATE inventory
+                SET quantity = quantity - ?
+                WHERE product_id = ? AND location_id = ?
+            """, (quantity, product_id, location_id))
 
-    # Fetch logs
+            # Log movement
+            cursor.execute("""
+                INSERT INTO stock_movements (product_id, from_location, to_location, quantity, moved_by, purpose, invoice_number)
+                VALUES (?, ?, NULL, ?, ?, ?, ?)
+            """, (product_id, location_id, quantity, used_by, purpose, invoice_number))
+
+            # Log audit
+            product_name = next((p['product_name'] for p in products if p['product_id'] == product_id), "Unknown")
+            log_audit_action(
+                user=used_by,
+                action=f"Used Product ({purpose})",
+                product_name=product_name,
+                product_id=product_id,
+                location=location_name,
+                location_id=location_id,
+                quantity=quantity,
+                session_id=session_id,
+                ip=request.remote_addr,
+                invoice_number=invoice_number
+            )
+
+            # Log usage
+            cursor.execute("""
+                INSERT INTO usage_log (product_id, quantity, purpose, used_by, location)
+                VALUES (?, ?, ?, ?, ?)
+            """, (product_id, quantity, purpose, used_by, location_name))
+
+            conn.commit()
+            success_msg = f"✅ {quantity} x {product_name} used for '{purpose}'."
+        except ValueError as ve:
+            conn.rollback()
+            error_msg = f"⚠️ {ve}"
+        except Exception as e:
+            conn.rollback()
+            error_msg = "❌ An unexpected error occurred. Please try again."
+
+    # Usage logs
     if role == 'HQ':
         cursor.execute("""
             SELECT u.id, p.product_name, u.quantity, u.purpose, u.used_by, u.location, u.date_used
@@ -1057,13 +1267,15 @@ def use_product():
                                products=products,
                                mbella_usage=mbella_logs,
                                citibella_usage=citibella_logs,
-                               success=success_msg)
+                               success=success_msg,
+                               error=error_msg)
+
     else:
         cursor.execute("""
             SELECT u.id, p.product_name, u.quantity, u.purpose, u.used_by, u.location, u.date_used
             FROM usage_log u
             JOIN products p ON u.product_id = p.product_id
-            WHERE u.location = %s
+            WHERE u.location = ?
             ORDER BY u.date_used DESC
         """, (role,))
         usage_logs = cursor.fetchall()
@@ -1075,7 +1287,8 @@ def use_product():
                                role=role,
                                products=products,
                                usage_logs=usage_logs,
-                               success=success_msg)
+                               success=success_msg,
+                               error=error_msg)
 
 
 @app.route("/manage_products")
@@ -1084,16 +1297,33 @@ def manage_products():
     if session.get('role') != 'HQ':
         return redirect(url_for('dashboard'))
 
+    search = request.args.get('search', '').strip()
+
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM products ORDER BY product_name")
-    products = cursor.fetchall()
+    if search:
+        cursor.execute("""
+            SELECT * FROM products
+            WHERE product_name LIKE ?
+            ORDER BY product_name
+        """, (f"%{search}%",))
+    else:
+        cursor.execute("SELECT * FROM products ORDER BY product_name")
 
+    products = cursor.fetchall()
     cursor.close()
     conn.close()
 
-    return render_template("manage_products.html", products=products)
+    # Optional: Audit logging
+    log_audit_action(
+        user=session.get('username'),
+        action="Viewed Product List",
+        session_id=session.get('session_id'),
+        ip=request.remote_addr
+    )
+
+    return render_template("manage_products.html", products=products, search=search)
 
  # ───────────────────  Edit Product ───────────────────
 @app.route('/edit_product/<int:product_id>', methods=['GET', 'POST'])
@@ -1105,62 +1335,66 @@ def edit_product(product_id):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM products WHERE product_id = %s", (product_id,))
+    # Fetch product first
+    cursor.execute("SELECT * FROM products WHERE product_id = ?", (product_id,))
     product = cursor.fetchone()
-
-    # Get HQ inventory quantity for this product
-    cursor.execute("""
-        SELECT quantity FROM inventory
-        WHERE product_id = %s AND location_id = (
-            SELECT location_id FROM locations WHERE name = 'HQ'
-        )
-    """, (product_id,))
-    inventory_row = cursor.fetchone()
-    product['quantity'] = inventory_row['quantity'] if inventory_row else 0
 
     if not product:
         cursor.close()
         conn.close()
         return "❌ Product not found.", 404
 
+    # Then fetch HQ quantity
+    cursor.execute("""
+        SELECT quantity FROM inventory
+        WHERE product_id = ? AND location_id = (
+            SELECT location_id FROM locations WHERE name = 'HQ'
+        )
+    """, (product_id,))
+    inventory_row = cursor.fetchone()
+    product['quantity'] = inventory_row['quantity'] if inventory_row else 0
+
     if request.method == 'POST':
-        product_name = request.form['product_name']
-        supplier_name = request.form['supplier_name']
-        category = request.form['category']
-        unit_price = float(request.form['unit_price'])
-        reorder_level = int(request.form['reorder_level'])
-        quantity = int(request.form['quantity'])
+        try:
+            product_name = request.form['product_name']
+            supplier_name = request.form['supplier_name']
+            category = request.form['category']
+            unit_price = float(request.form['unit_price'])
+            reorder_level = int(request.form['reorder_level'])
+            quantity = int(request.form['quantity'])
 
-        # Update product info
-        cursor.execute("""
-            UPDATE products
-            SET product_name = %s,
-                supplier_name = %s,
-                category = %s,
-                unit_price = %s,
-                reorder_level = %s
-            WHERE product_id = %s
-        """, (product_name, supplier_name, category, unit_price, reorder_level, product_id))
+            # Update product info
+            cursor.execute("""
+                UPDATE products
+                SET product_name = ?,
+                    supplier_name = ?,
+                    category = ?,
+                    unit_price = ?,
+                    reorder_level = ?
+                WHERE product_id = ?
+            """, (product_name, supplier_name, category, unit_price, reorder_level, product_id))
 
-        # Update HQ inventory quantity
-        cursor.execute("""
-            UPDATE inventory
-            SET quantity = %s
-            WHERE product_id = %s AND location_id = (
-                SELECT location_id FROM locations WHERE name = 'HQ'
-            )
-        """, (quantity, product_id))
+            # Update inventory quantity in HQ
+            cursor.execute("""
+                UPDATE inventory
+                SET quantity = ?
+                WHERE product_id = ? AND location_id = (
+                    SELECT location_id FROM locations WHERE name = 'HQ'
+                )
+            """, (quantity, product_id))
 
-        conn.commit()
-        cursor.close()
-        conn.close()
+            conn.commit()
 
-        return redirect(url_for('manage_products'))
+            flash("✅ Product updated successfully!", "success")
+            return redirect(url_for('manage_products'))
+
+        except Exception as e:
+            conn.rollback()
+            flash(f"❌ Error updating product: {str(e)}", "danger")
 
     cursor.close()
     conn.close()
     return render_template('edit_product.html', product=product)
-
 
 # ─────────────────── Delete Product ───────────────────
 @app.route('/delete_product/<int:product_id>', methods=['POST'])
@@ -1170,43 +1404,46 @@ def delete_product(product_id):
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     try:
-        # Get product name before deletion
-        cursor.execute("SELECT product_name FROM products WHERE product_id = %s", (product_id,))
+        # Get product info before deletion
+        cursor.execute("SELECT product_name FROM products WHERE product_id = ?", (product_id,))
         product = cursor.fetchone()
-        product_name = product[0] if product else "Unknown"
+        product_name = product['product_name'] if product else "Unknown"
 
-        # Delete associated inventory and stock movements
-        cursor.execute("DELETE FROM inventory WHERE product_id = %s", (product_id,))
-        cursor.execute("DELETE FROM stock_movements WHERE product_id = %s", (product_id,))
-        cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
+        # Delete inventory and stock movements (if desired)
+        cursor.execute("DELETE FROM inventory WHERE product_id = ?", (product_id,))
+        cursor.execute("DELETE FROM stock_movements WHERE product_id = ?", (product_id,))
+        cursor.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
         conn.commit()
 
-        # Log the deletion in audit log
+        # Log audit
         log_audit_action(
-            user=moved_by,
+            user=session.get('username'),
             action="Deleted Product",
-            product_name=name,
+            product_name=product_name,
             product_id=product_id,
-            location=f"{from_location} → {to_location}",
-            location_id=to_location,
-            quantity=quantity,
-            session_id=session_id,
+            location="HQ",
+            location_id=1,  # HQ
+            quantity=0,
+            session_id=session.get('session_id'),
             ip=request.remote_addr,
-            invoice_number=invoice_number
+            invoice_number=None
         )
+
+        flash(f"🗑️ Product '{product_name}' deleted successfully.", "success")
 
     except Exception as e:
         conn.rollback()
+        flash(f"❌ Failed to delete product: {str(e)}", "danger")
+
+    finally:
         cursor.close()
         conn.close()
-        return f"❌ Failed to delete: {str(e)}", 400
 
-    cursor.close()
-    conn.close()
     return redirect(url_for('manage_products'))
+
 
 
 # ─────────────────── Invoice───────────────────
@@ -1249,12 +1486,13 @@ def export_movements_excel():
     conn = get_connection()
     df = pd.read_sql("""
         SELECT 
-            sm.movement_id AS id,
-            p.product_name, 
-            fl.name AS from_location, 
-            tl.name AS to_location, 
-            sm.quantity, sm.moved_by, 
-            sm.date_moved
+            sm.movement_id AS ID,
+            p.product_name AS Product, 
+            fl.name AS From_Location, 
+            tl.name AS To_Location, 
+            sm.quantity AS Quantity, 
+            sm.moved_by AS Moved_By, 
+            sm.date_moved AS Timestamp
         FROM stock_movements sm
         JOIN products p ON sm.product_id = p.product_id
         JOIN locations fl ON sm.from_location = fl.location_id
@@ -1268,22 +1506,23 @@ def export_movements_excel():
         df.to_excel(writer, index=False, sheet_name='Movements')
 
     output.seek(0)
-    return Response(
-        output.getvalue(),
+    return send_file(
+        output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={"Content-Disposition": "attachment;filename=movement_history.xlsx"}
+        as_attachment=True,
+        download_name='movement_history.xlsx'
     )
 
-filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
+
 @app.route('/export/low_stock')
 def export_low_stock():
     conn = get_connection()
     df = pd.read_sql("""
         SELECT 
-            p.product_name, 
-            l.name AS location, 
-            i.quantity, 
-            p.reorder_level
+            p.product_name AS Product, 
+            l.name AS Location, 
+            i.quantity AS Quantity, 
+            p.reorder_level AS Reorder_Level
         FROM inventory i
         JOIN products p ON i.product_id = p.product_id
         JOIN locations l ON i.location_id = l.location_id
@@ -1292,16 +1531,19 @@ def export_low_stock():
     """, conn)
     conn.close()
 
+    filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Low Stock')
 
     output.seek(0)
-    return Response(
-        output.getvalue(),
+    return send_file(
+        output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={"Content-Disposition": f"attachment;filename={filename}"}
+        as_attachment=True,
+        download_name=filename
     )
+
 
 # ─────────────────── Export Products ───────────────────
 @app.route("/export/products")
@@ -1309,7 +1551,6 @@ def export_products():
     import csv
     from io import StringIO
     from flask import Response
-    import pymysql  # or your database connector
 
     conn = get_connection()  # your DB connection function
     cursor = conn.cursor()
@@ -1363,13 +1604,16 @@ def export_audit_log():
 # http://localhost:5001/export/audit_log_secret?key=supersecret123
 
 @app.route("/api/dashboard_metrics")
+@login_required  # Optional: Only allow logged-in users to fetch metrics
 def dashboard_metrics():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
+    # Total SKUs
     cursor.execute("SELECT COUNT(*) AS total_skus FROM products")
     total_skus = cursor.fetchone()['total_skus']
 
+    # Low stock products
     cursor.execute("""
         SELECT COUNT(*) AS low_stock 
         FROM inventory i 
@@ -1378,13 +1622,19 @@ def dashboard_metrics():
     """)
     low_stock = cursor.fetchone()['low_stock']
 
+    # (Optional) Count total quantity across locations
+    cursor.execute("SELECT SUM(quantity) AS total_quantity FROM inventory")
+    total_quantity = cursor.fetchone()['total_quantity'] or 0
+
     conn.close()
     return jsonify({
         "total_skus": total_skus,
         "low_stock": low_stock,
+        "total_quantity": total_quantity,
         "branches": ["Mbella", "Citibella"]
     })
 
+
 # ─────────────────── Run the server ───────────────────
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)  
+    app.run()

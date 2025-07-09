@@ -1,15 +1,18 @@
+import os
 import mysql.connector
-import pymysql
-pymysql.install_as_MySQLdb()
+from urllib.parse import urlparse
 
 def get_connection():
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("❌ DATABASE_URL not set in environment variables")
+
+    parsed = urlparse(db_url)
+
     return mysql.connector.connect(
-        host='localhost',  
-        user="root",
-        password="JacksonYee1128",
-        database="inventory_db"
+        host=parsed.hostname,
+        port=parsed.port,
+        user=parsed.username,
+        password=parsed.password,
+        database=parsed.path.lstrip('/'),
     )
-
-
-
-    
