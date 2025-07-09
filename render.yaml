@@ -7,5 +7,13 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: DATABASE_URL
-        value: mysql://root:JacksonYee1128@db.render.com:3306/inventory_db
+      - key: DB_HOST
+        value: db.render.com
+      - key: DB_PORT
+        value: 3306
+      - key: DB_NAME
+        value: inventory_db
+      - key: DB_USER
+        value: root
+      - key: DB_PASSWORD
+        value: JacksonYee1128
