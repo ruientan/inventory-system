@@ -160,29 +160,38 @@ def get_recent_movements(cursor, limit=20, location=None):
 
 # ───────────────────── Dashboard ─────────────────────
 
+from datetime import datetime
+
 @app.route('/')
 def dashboard():
     if 'role' not in session:
         return redirect(url_for('login'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     role = session['role']
 
     hq_summary        = get_inventory_summary(cursor, location='HQ')
     mbella_summary    = get_inventory_summary(cursor, location='Mbella')
     citibella_summary = get_inventory_summary(cursor, location='Citibella')
+
     if role == 'HQ':
         summary = get_inventory_summary(cursor)  # all locations
-    else:
-        summary = get_inventory_summary(cursor, location=role)  # only their own location
-    stock_by_location = get_stock_by_location(cursor)
-    if role == 'HQ':
         recent_movements = get_recent_movements(cursor, limit=20)
     else:
+        summary = get_inventory_summary(cursor, location=role)
         recent_movements = get_recent_movements(cursor, limit=20, location=role)
 
+    # 🔧 Convert date_moved string → datetime object
+    for mv in recent_movements:
+        if isinstance(mv['date_moved'], str):
+            try:
+                mv['date_moved'] = datetime.strptime(mv['date_moved'], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                pass
+
+    stock_by_location = get_stock_by_location(cursor)
     product_names     = get_all_product_names(cursor)
 
     if role == 'HQ':
@@ -264,7 +273,7 @@ def initiate_transfer():
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Fetch product and branch location options
     cursor.execute("SELECT product_id, product_name FROM products ORDER BY product_name")
@@ -335,7 +344,7 @@ def view_invoice(filename):
 @login_required
 def transfer_stock():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     cursor.execute("SELECT product_id, product_name FROM products")
     products = cursor.fetchall()
@@ -451,7 +460,7 @@ def confirm_transfer():
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     location_name = session.get('role')
 
     # Get location_id
@@ -647,7 +656,7 @@ def mark_delivered(transaction_id):
 @login_required
 def transaction_history():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     role = session.get('role')
     username = session.get('username')
@@ -690,7 +699,7 @@ def transaction_history():
 @login_required
 def export_transaction_history():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     role = session.get('role')
 
@@ -773,7 +782,7 @@ def export_transaction_history():
 @app.route('/movements')
 def view_movements():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Get filters from query parameters
     product_search = request.args.get('product_search', '')
@@ -824,7 +833,7 @@ def view_movements():
 @app.route('/movements/export')
 def export_movements():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Get filters from query params
     product_search = request.args.get('product_search', '')
@@ -925,7 +934,7 @@ def add_product():
             return render_template('add_product.html', error=error)
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
 
         # Check for duplicates
         cursor.execute("SELECT * FROM products WHERE product_name = ?", (product_name,))
@@ -984,7 +993,7 @@ def add_product():
 @login_required
 def restock():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Fetch products and locations
     cursor.execute("SELECT product_id, product_name FROM products")
@@ -1077,8 +1086,8 @@ def login():
             return render_template('login.html', error=error)
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -1156,7 +1165,7 @@ def use_product():
     error_msg = None
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Load products
     cursor.execute("SELECT * FROM products ORDER BY product_name")
@@ -1300,7 +1309,7 @@ def manage_products():
     search = request.args.get('search', '').strip()
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     if search:
         cursor.execute("""
@@ -1333,7 +1342,7 @@ def edit_product(product_id):
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Fetch product first
     cursor.execute("SELECT * FROM products WHERE product_id = ?", (product_id,))
@@ -1404,7 +1413,7 @@ def delete_product(product_id):
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     try:
         # Get product info before deletion
@@ -1582,7 +1591,7 @@ def export_audit_log():
         return "❌ Unauthorized", 403
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     cursor.execute("SELECT * FROM audit_log ORDER BY timestamp DESC")
     logs = cursor.fetchall()
     df = pd.DataFrame(logs)
@@ -1607,7 +1616,7 @@ def export_audit_log():
 @login_required  # Optional: Only allow logged-in users to fetch metrics
 def dashboard_metrics():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
     # Total SKUs
     cursor.execute("SELECT COUNT(*) AS total_skus FROM products")
