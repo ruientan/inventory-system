@@ -1,19 +1,20 @@
 services:
   - type: web
-    name: inventory-tracker
+    name: inventory-system
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
     envVars:
-      - key: FLASK_ENV
-        value: production
       - key: DB_HOST
-        value: sql12.freesqldatabase.com
-      - key: DB_PORT
-        value: 3306
+        value: ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com
       - key: DB_NAME
-        value: sql12789125
+        value: inventory_system_gtol
       - key: DB_USER
-        value: sql12789125
+        value: inventory_system_gtol_user
       - key: DB_PASSWORD
-        value: ujcpYqUhIM
+        value: aYf9pFVCC8siUGiTuPmya42MqT1WK3Os
+      - key: DB_PORT
+        value: 5432
+      - key: SECRET_KEY
+        value: Citibella123
