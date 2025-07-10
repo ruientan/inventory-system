@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     location_id INTEGER NOT NULL,

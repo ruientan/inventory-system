@@ -1,12 +1,12 @@
 DROP TABLE IF EXISTS stock_movements;
 
 CREATE TABLE stock_movements (
-    movement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    movement_id SERIAL PRIMARY KEY,
     product_id INTEGER,
     from_location INTEGER,
     to_location INTEGER,
     quantity INTEGER,
-    date_moved DATETIME DEFAULT CURRENT_TIMESTAMP,
+    date_moved TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     moved_by TEXT,
     invoice_number TEXT,
     purpose TEXT,

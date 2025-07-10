@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS transaction_items;
 
 CREATE TABLE transaction_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     transaction_id INTEGER,
     product_id INTEGER,
     quantity INTEGER,

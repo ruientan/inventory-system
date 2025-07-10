@@ -1,11 +1,11 @@
 DROP TABLE IF EXISTS products;
 
 CREATE TABLE products (
-    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id SERIAL PRIMARY KEY,
     product_name TEXT,
     supplier_name TEXT,
     category TEXT,
-    unit_price REAL,
+    unit_price NUMERIC,
     reorder_level INTEGER DEFAULT 0
 );
 

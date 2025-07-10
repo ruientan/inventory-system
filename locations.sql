@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS locations;
 
 CREATE TABLE locations (
-  location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  location_id SERIAL PRIMARY KEY,
   name TEXT
 );
 

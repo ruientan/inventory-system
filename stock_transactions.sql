@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS stock_transactions;
 
 CREATE TABLE stock_transactions (
-    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id SERIAL PRIMARY KEY,
     invoice_number TEXT UNIQUE,
     from_location_id INTEGER,
     to_location_id INTEGER,

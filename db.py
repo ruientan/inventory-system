@@ -1,15 +1,17 @@
-import mysql.connector
-import pymysql
-pymysql.install_as_MySQLdb()
+from dotenv import load_dotenv
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+load_dotenv()
 
 def get_connection():
-    return mysql.connector.connect(
-        host='localhost',  
-        user="root",
-        password="JacksonYee1128",
-        database="inventory_db"
-    )
-
-
-
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        port=os.getenv("DB_PORT"),
+        sslmode="require",
+        cursor_factory=RealDictCursor
+    )   
     

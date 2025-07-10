@@ -9,13 +9,27 @@ from invoice_generator import generate_invoice
 import os
 import pandas as pd
 from io import BytesIO
-from datetime import datetime
 import uuid
 from flask_cors import CORS 
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
-app.secret_key = 'Citibella123'
+
+load_dotenv()
+app.secret_key = os.getenv('SECRET_KEY')
+
+conn = psycopg2.connect(
+    host=os.getenv("DB_HOST"),
+    database=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    port=os.getenv("DB_PORT"),
+    cursor_factory=RealDictCursor
+)
+cursor = conn.cursor()
 
 @app.before_request
 def require_login():
@@ -64,43 +78,53 @@ def get_all_product_names(cursor):
 
 def get_inventory_summary(cursor, location=None):
     params = []
-    location_filter = ""
+    location_clause = ""
 
     if location:
-        location_filter = "WHERE l.name = %s"
+        location_clause = "WHERE l.name = %s"
         params = [location]
 
-    cursor.execute(f"""
+    # Total SKUs
+    cursor.execute("""
         SELECT COUNT(DISTINCT i.product_id) AS skus
         FROM inventory i
         JOIN locations l ON i.location_id = l.location_id
-        {location_filter}
-    """, params)
+        """ + location_clause,
+        params
+    )
     total_skus = cursor.fetchone()['skus'] or 0
 
-    cursor.execute(f"""
+    # Total Quantity
+    cursor.execute("""
         SELECT SUM(i.quantity) AS total_qty
         FROM inventory i
         JOIN locations l ON i.location_id = l.location_id
-        {location_filter}
-    """, params)
+        """ + location_clause,
+        params
+    )
     total_qty = cursor.fetchone()['total_qty'] or 0
 
-    cursor.execute(f"""
+    # Low Stock Items
+    query = """
         SELECT COUNT(*) AS low
         FROM inventory i
         JOIN products p ON i.product_id = p.product_id
         JOIN locations l ON i.location_id = l.location_id
         WHERE ((i.quantity <= p.reorder_level AND p.reorder_level > 0) OR i.quantity <= 1)
-        {f"AND l.name = %s" if location else ""}
-    """, params)
+    """
+    low_stock_params = []
+    if location:
+        query += " AND l.name = %s"
+        low_stock_params.append(location)
+
+    cursor.execute(query, low_stock_params)
     low_stock = cursor.fetchone()['low'] or 0
 
-    return dict(
-        total_skus=total_skus,
-        total_quantity=total_qty,
-        low_stock_items=low_stock
-    )
+    return {
+        'total_skus': total_skus,
+        'total_quantity': total_qty,
+        'low_stock_items': low_stock
+    }
 
 
 
@@ -157,7 +181,7 @@ def dashboard():
         return redirect(url_for('login'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     role = session['role']
 
@@ -255,7 +279,7 @@ def initiate_transfer():
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     # Fetch product and branch location options
     cursor.execute("SELECT product_id, product_name FROM products ORDER BY product_name")
@@ -313,7 +337,7 @@ def view_invoice(filename):
 @login_required
 def transfer_stock():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("SELECT product_id, product_name FROM products")
     products = cursor.fetchall()
@@ -413,7 +437,7 @@ def confirm_transfer():
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     location_name = session.get('role')
 
     # Get location_id from locations table
@@ -477,7 +501,8 @@ def confirm_transfer():
             cursor.execute("""
                 INSERT INTO inventory (product_id, location_id, quantity)
                 VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+                ON CONFLICT (product_id, location_id)
+                DO UPDATE SET quantity = quantity + EXCLUDED.quantity
             """, (pid, location_id, qty))
 
             # Log movement
@@ -563,7 +588,7 @@ def mark_delivered(transaction_id):
 @login_required
 def transaction_history():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     role = session.get('role')
     username = session.get('username')
@@ -585,14 +610,14 @@ def transaction_history():
             st.status,
             st.initiated_by,
             st.created_at,
-            GROUP_CONCAT(CONCAT(p.product_name, ' (x', ti.quantity, ')') SEPARATOR '<br>') AS items
+            STRING_AGG(p.product_name || ' (x' || ti.quantity || ')', '<br>') AS items
         FROM stock_transactions st
         JOIN locations fl ON st.from_location_id = fl.location_id
         JOIN locations tl ON st.to_location_id = tl.location_id
         JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
         JOIN products p ON ti.product_id = p.product_id
         WHERE st.from_location_id = %s OR st.to_location_id = %s
-        GROUP BY st.transaction_id
+        GROUP BY st.transaction_id, fl.name, tl.name, st.status, st.initiated_by, st.created_at
         ORDER BY st.created_at DESC
     """, (location_id, location_id))
 
@@ -606,14 +631,14 @@ def transaction_history():
 @login_required
 def export_transaction_history():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("""
         SELECT 
             st.invoice_number,
             fl.name AS from_location,
             tl.name AS to_location,
-            GROUP_CONCAT(CONCAT(p.product_name, ' (', ti.quantity, ')') SEPARATOR ', ') AS items,
+            STRING_AGG(p.product_name || ' (x' || ti.quantity || ')', ', ') AS items,
             st.status,
             st.initiated_by,
             st.created_at
@@ -622,7 +647,7 @@ def export_transaction_history():
         JOIN locations tl ON st.to_location_id = tl.location_id
         JOIN transaction_items ti ON st.transaction_id = ti.transaction_id
         JOIN products p ON ti.product_id = p.product_id
-        GROUP BY st.transaction_id
+        GROUP BY st.transaction_id, fl.name, tl.name, st.invoice_number, st.status, st.initiated_by, st.created_at
         ORDER BY st.created_at DESC
     """)
 
@@ -647,7 +672,7 @@ def export_transaction_history():
 @app.route('/movements')
 def view_movements():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     # Get filters from query parameters
     product_search = request.args.get('product_search', '')
@@ -698,7 +723,7 @@ def view_movements():
 @app.route('/movements/export')
 def export_movements():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     # Get filters from query params
     product_search = request.args.get('product_search', '')
@@ -778,7 +803,7 @@ def add_product():
         invoice_number = None  # Not relevant for new product entry
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Check if product already exists
         cursor.execute("SELECT * FROM products WHERE product_name = %s", (product_name,))
@@ -786,15 +811,12 @@ def add_product():
             error = f"⚠️ Product '{product_name}' already exists."
             return render_template('add_product.html', error=error)
 
-        # 1. Insert product
+        # 1. Insert product and get product_id (PostgreSQL way)
         cursor.execute("""
             INSERT INTO products (product_name, supplier_name, category, unit_price, reorder_level)
             VALUES (%s, %s, %s, %s, %s)
+            RETURNING product_id
         """, (product_name, supplier_name, category, unit_price, reorder_level))
-        conn.commit()
-
-        # Get the new product_id
-        cursor.execute("SELECT LAST_INSERT_ID() AS product_id")
         product_id = cursor.fetchone()['product_id']
 
         # 2. Add initial inventory to HQ
@@ -837,7 +859,7 @@ def add_product():
 @app.route('/restock', methods=['GET', 'POST'])
 def restock():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     # Fetch product and location options
     cursor.execute("SELECT product_id, product_name FROM products")
@@ -860,7 +882,8 @@ def restock():
         cursor.execute("""
             INSERT INTO inventory (product_id, location_id, quantity)
             VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+            ON CONFLICT (product_id, location_id) DO UPDATE
+            SET quantity = quantity + EXCLUDED.quantity
         """, (product_id, location_id, quantity))
 
         # 2. Log movement (from NULL to location) with purpose
@@ -973,7 +996,7 @@ def use_product():
     success_msg = None
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     # Load product list
     cursor.execute("SELECT * FROM products ORDER BY product_name")
@@ -1103,7 +1126,7 @@ def edit_product(product_id):
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("SELECT * FROM products WHERE product_id = %s", (product_id,))
     product = cursor.fetchone()
@@ -1274,7 +1297,8 @@ def export_movements_excel():
         headers={"Content-Disposition": "attachment;filename=movement_history.xlsx"}
     )
 
-filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
+
+
 @app.route('/export/low_stock')
 def export_low_stock():
     conn = get_connection()
@@ -1297,6 +1321,7 @@ def export_low_stock():
         df.to_excel(writer, index=False, sheet_name='Low Stock')
 
     output.seek(0)
+    filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
     return Response(
         output.getvalue(),
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1306,11 +1331,6 @@ def export_low_stock():
 # ─────────────────── Export Products ───────────────────
 @app.route("/export/products")
 def export_products():
-    import csv
-    from io import StringIO
-    from flask import Response
-    import pymysql  # or your database connector
-
     conn = get_connection()  # your DB connection function
     cursor = conn.cursor()
 
@@ -1323,13 +1343,15 @@ def export_products():
     writer.writerow(headers)
     writer.writerows(rows)
 
-    output = si.getvalue()
+    output = '\ufeff' + si.getvalue()
     si.close()
+
+    filename = f"products_{datetime.now().strftime('%d%m%y')}.csv"
 
     return Response(
         output,
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=products.csv"}
+        headers={"Content-Disposition": f"attachment;filename={filename}"}
     )
 
 # ─────────────────── Export Audit Log ───────────────────
@@ -1341,7 +1363,7 @@ def export_audit_log():
         return "❌ Unauthorized", 403
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("SELECT * FROM audit_log ORDER BY timestamp DESC")
     logs = cursor.fetchall()
     df = pd.DataFrame(logs)
@@ -1365,7 +1387,7 @@ def export_audit_log():
 @app.route("/api/dashboard_metrics")
 def dashboard_metrics():
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("SELECT COUNT(*) AS total_skus FROM products")
     total_skus = cursor.fetchone()['total_skus']
