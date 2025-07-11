@@ -927,7 +927,7 @@ def login():
         password = request.form['password']
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
         user = cursor.fetchone()
         cursor.close()
@@ -1108,7 +1108,7 @@ def manage_products():
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     cursor.execute("SELECT * FROM products ORDER BY product_name")
     products = cursor.fetchall()
