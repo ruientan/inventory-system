@@ -636,7 +636,7 @@ def transaction_history():
             except ValueError:
                 t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
    
-   cursor.close()
+    cursor.close()
     conn.close()
 
     return render_template("transaction_history.html", transactions=transactions)
