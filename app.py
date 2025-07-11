@@ -627,7 +627,16 @@ def transaction_history():
     """, (location_id, location_id))
 
     transactions = cursor.fetchall()
-    cursor.close()
+
+
+    for t in transactions:
+    if isinstance(t['created_at'], str):
+        try:
+            t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
+   
+   cursor.close()
     conn.close()
 
     return render_template("transaction_history.html", transactions=transactions)
@@ -775,6 +784,13 @@ def export_movements():
     si = StringIO()
     cw = csv.writer(si)
     cw.writerow(['ID', 'Product', 'From', 'To', 'Quantity', 'Moved By', 'Timestamp'])
+
+    for row in rows:
+        if isinstance(row['timestamp'], str):
+            try:
+                row['timestamp'] = datetime.strptime(row['timestamp'], "%Y-%m-%d %H:%M:%S.%f")
+            except ValueError:
+                row['timestamp'] = datetime.strptime(row['timestamp'], "%Y-%m-%d %H:%M:%S")
 
     for row in rows:
         cw.writerow([
