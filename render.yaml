@@ -3,8 +3,9 @@ services:
     name: inventory-system
     env: python
     plan: free
+    runtime: python3.11
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: gunicorn app:app
     envVars:
       - key: DB_HOST
         value: ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com
