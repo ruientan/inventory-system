@@ -15,6 +15,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from datetime import datetime
+from dateutil import parser
 
 app = Flask(__name__)
 CORS(app)
@@ -631,11 +632,10 @@ def transaction_history():
 
     for t in transactions:
         if isinstance(t['created_at'], str):
-            timestamp = t['created_at'].split('+')[0]
             try:
-                t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S.%f")
-            except ValueError:
                 t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                t['created_at'] = parser.parse(t['created_at'])
    
     cursor.close()
     conn.close()
@@ -795,7 +795,7 @@ def export_movements():
 
     for row in rows:
         cw.writerow([
-            row['movement_id'], row['product_name'], row['from_location'],
+            row['id'], row['product_name'], row['from_location'],
             row['to_location'], row['quantity'], row['moved_by'],
             row['timestamp'].strftime('%d/%m/%Y %H:%M') if row['timestamp'] else ''
         ])
