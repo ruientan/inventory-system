@@ -7,8 +7,8 @@ CREATE TABLE stock_transactions (
     to_location_id INTEGER,
     status TEXT DEFAULT 'Preparing' CHECK(status IN ('Preparing', 'Sent Out', 'Pending', 'Delivered', 'Received')),
     initiated_by TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT INTO stock_transactions (transaction_id, invoice_number, from_location_id, to_location_id, status, initiated_by, created_at, updated_at) VALUES
