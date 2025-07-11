@@ -630,11 +630,11 @@ def transaction_history():
 
 
     for t in transactions:
-    if isinstance(t['created_at'], str):
-        try:
-            t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S.%f")
-        except ValueError:
-            t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
+        if isinstance(t['created_at'], str):
+            try:
+                t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S.%f")
+            except ValueError:
+                t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
    
    cursor.close()
     conn.close()
