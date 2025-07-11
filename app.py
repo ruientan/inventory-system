@@ -367,8 +367,8 @@ def transfer_stock():
 
         if from_location == 1 and to_location in [2, 3]:
             suffix = 'M' if to_location == 2 else 'C'
-            today_str = datetime.now().strftime('%d%m%y')
-            invoice_number = f"HQ-{suffix}-{today_str}"
+            timestamp_str = datetime.now().strftime('%d%m%y-%H%M%S')
+            invoice_number = f"HQ-{suffix}-{timestamp_str}"
 
         cursor.execute("""
             INSERT INTO stock_transactions (invoice_number, from_location_id, to_location_id, status, initiated_by)
