@@ -62,7 +62,7 @@ def log_audit_action(username, action, product_name=None, location=None, quantit
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     cursor.execute(query, (
-        user, action, product_name, location, quantity,
+        username, action, product_name, location, quantity,
         product_id, location_id, session_id, ip, invoice_number, purpose,
         datetime.now()
     ))
