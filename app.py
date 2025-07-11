@@ -304,6 +304,7 @@ def initiate_transfer():
         cursor.execute("""
             INSERT INTO stock_transactions (invoice_number, from_location_id, to_location_id, status, initiated_by)
             VALUES (%s, %s, %s, 'Preparing', %s)
+            RETURNING transaction_id
         """, (invoice_number, 1, to_location, moved_by))  # 1 = HQ
         
         transaction_id = cursor.fetchone()['transaction_id']
@@ -371,6 +372,7 @@ def transfer_stock():
         cursor.execute("""
             INSERT INTO stock_transactions (invoice_number, from_location_id, to_location_id, status, initiated_by)
             VALUES (%s, %s, %s, 'Preparing', %s)
+            RETURNING transaction_id
         """, (invoice_number, from_location, to_location, moved_by))
         
         transaction_id = cursor.fetchone()['transaction_id']
