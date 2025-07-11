@@ -50,14 +50,14 @@ def login_required(f):
     return decorated_function
 
 # ────────── Analytics helper functions ──────────
-def log_audit_action(user, action, product_name=None, location=None, quantity=None,
+def log_audit_action(username, action, product_name=None, location=None, quantity=None,
                      product_id=None, location_id=None, session_id=None, ip=None,
                      invoice_number=None, purpose=None):
     conn = get_connection()
     cursor = conn.cursor()
 
     query = """
-        INSERT INTO audit_log (user, action, product_name, location, quantity,
+        INSERT INTO audit_log (username, action, product_name, location, quantity,
                                product_id, location_id, session_id, ip, invoice_number, purpose, timestamp)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
@@ -391,7 +391,7 @@ def transfer_stock():
             transferred_items.append((name, quantity))
 
             log_audit_action(
-                user=moved_by,
+                username=moved_by,
                 action="Initiated Transfer",
                 product_name=name,
                 product_id=product_id,
@@ -517,7 +517,7 @@ def confirm_transfer():
             pname = cursor.fetchone()['product_name']
 
             log_audit_action(
-                user=received_by,
+                username=received_by,
                 action="Confirmed Transfer",
                 product_name=pname,
                 product_id=pid,
@@ -836,7 +836,7 @@ def add_product():
 
         # 4. Audit log
         log_audit_action(
-            user=moved_by,
+            username=moved_by,
             action="Added New Product",
             product_name=product_name,
             product_id=product_id,
@@ -901,7 +901,7 @@ def restock():
 
         # 4. Log audit
         log_audit_action(
-            user=moved_by,
+            username=moved_by,
             action="Restocked Product",
             product_name=product_name,
             product_id=product_id,
@@ -941,7 +941,7 @@ def login():
 
             # ✅ Log successful login
             log_audit_action(
-                user=username,
+                username=username,
                 action="Login Success",
                 session_id=session['session_id'],
                 ip=request.remote_addr
@@ -951,7 +951,7 @@ def login():
         else:
             error = 'Invalid username or password.'
             log_audit_action(
-                user=username,
+                username=username,
                 action="Login Failed",
                 session_id=str(uuid.uuid4()),
                 ip=request.remote_addr
@@ -969,7 +969,7 @@ def logout():
 
     # Log the logout event
     log_audit_action(
-        user=username,
+        username=username,
         action="Logout",
         session_id=session_id,
         ip=ip
@@ -1032,7 +1032,7 @@ def use_product():
         # Log audit
         product_name = next((p['product_name'] for p in products if p['product_id'] == product_id), "Unknown")
         log_audit_action(
-            user=used_by,
+            username=used_by,
             action=f"Used Product ({purpose})",
             product_name=product_name,
             product_id=product_id,
@@ -1210,7 +1210,7 @@ def delete_product(product_id):
 
         # Log the deletion in audit log
         log_audit_action(
-            user=moved_by,
+            username=moved_by,
             action="Deleted Product",
             product_name=name,
             product_id=product_id,
