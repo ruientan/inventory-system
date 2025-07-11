@@ -508,7 +508,7 @@ def confirm_transfer():
                 INSERT INTO inventory (product_id, location_id, quantity)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (product_id, location_id)
-                DO UPDATE SET quantity = quantity + EXCLUDED.quantity
+                DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity
             """, (pid, location_id, qty))
 
             # Log movement
