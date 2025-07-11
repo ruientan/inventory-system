@@ -36,8 +36,8 @@
                     {% elif t.status == 'Sent Out' %}
                         🚚 Sent Out
                         {% if session['role'] in ['Mbella', 'Citibella'] %}
-                            <form action="{{ url_for('mark_delivered', transaction_id=t.transaction_id) }}" method="post" class="d-inline ms-2">
-                                <button type="submit" class="btn btn-sm btn-outline-success">✅ Confirm Delivered</button>
+                            <form action="{{ url_for('confirm_transfer') }}" method="get" class="d-inline ms-2">
+                                <button type="submit" class="btn btn-sm btn-outline-success">✅ Confirm Received</button>
                             </form>
                         {% endif %}
                     {% elif t.status == 'Preparing' %}

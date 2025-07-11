@@ -572,21 +572,8 @@ def mark_sent_out(transaction_id):
     flash('Transaction marked as Sent Out.', 'success')
     return redirect(url_for('transaction_history'))
 
-# ─────────────────── Mark Delivered ───────────────────
-@app.route('/mark_delivered/<int:transaction_id>', methods=['POST'])
-def mark_delivered(transaction_id):
-    if session['role'] not in ['Mbella', 'Citibella']:
-        return "Unauthorized", 403
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE stock_transactions SET status = 'Delivered' WHERE transaction_id = %s", (transaction_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
 
-    flash('Transaction marked as Delivered.', 'success')
-    return redirect(url_for('transaction_history'))
 
 
 # ─────────────────── Transaction History ───────────────────
