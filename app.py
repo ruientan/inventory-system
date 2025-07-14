@@ -18,6 +18,7 @@ from datetime import datetime
 from dateutil import parser
 from pytz import timezone
 import pytz 
+from sqlalchemy import create_engine
 
 app = Flask(__name__)
 CORS(app)
@@ -1348,8 +1349,10 @@ def export_movements_excel():
 
 @app.route('/export/low_stock')
 def export_low_stock():
-    conn = get_connection()
-    df = pd.read_sql("""
+    # Use SQLAlchemy engine instead of raw connection for compatibility with pandas
+    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol")
+
+    query = """
         SELECT 
             p.product_name, 
             l.name AS location, 
@@ -1358,17 +1361,18 @@ def export_low_stock():
         FROM inventory i
         JOIN products p ON i.product_id = p.product_id
         JOIN locations l ON i.location_id = l.location_id
-        WHERE i.quantity <= p.reorder_level OR i.quantity <= 1
+        WHERE (i.quantity <= p.reorder_level AND p.reorder_level > 0) OR i.quantity <= 1
         ORDER BY l.name, p.product_name
-    """, conn)
-    conn.close()
+    """
 
+    df = pd.read_sql(query, engine)
+
+    # Export to Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Low Stock')
 
     output.seek(0)
-    print(df.head())
     filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
     return Response(
         output.getvalue(),
