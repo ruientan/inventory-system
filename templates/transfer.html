@@ -44,6 +44,9 @@
                 <div class="col">
                     <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
                 </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-danger" onclick="removeRow(this)">❌</button>
+                </div>
             </div>
         </div>
 
@@ -76,20 +79,37 @@ function addRow() {
         <div class="col">
             <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
         </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-danger" onclick="removeRow(this)">❌</button>
+        </div>
     `;
     document.getElementById('product-rows').appendChild(row);
 }
 
 function validateForm() {
     const productInputs = document.querySelectorAll('input[name="product_name[]"]');
+    const quantityInputs = document.querySelectorAll('input[name="quantity[]"]');
     const productNames = [];
+    
+    for (let i = 0; i < productInputs.length; i++) {
+        const name = productInputs[i].value.trim().toLowerCase();
+        const qty = quantityInputs[i].value.trim();
 
-    for (let input of productInputs) {
-        const name = input.value.trim().toLowerCase();
-        if (productNames.includes(name)) {
-            alert("⚠️ Duplicate product detected: " + input.value + ". Please remove duplicates before submitting.");
+        if (!name || !qty) {
+            alert("⚠️ All product names and quantities must be filled in.");
             return false;
         }
+
+        if (productNames.includes(name)) {
+            alert("⚠️ Duplicate product detected: " + productInputs[i].value + ". Please remove duplicates.");
+            return false;
+        }
+
+        if (parseInt(qty) <= 0) {
+            alert("⚠️ Quantity must be greater than 0.");
+            return false;
+        }
+
         productNames.push(name);
     }
     return true;
