@@ -1360,6 +1360,8 @@ def export_low_stock():
         SELECT 
             p.product_name, 
             l.name AS location, 
+            p.supplier_name,
+            p.category,
             i.quantity, 
             p.reorder_level
         FROM inventory i
