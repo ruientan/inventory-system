@@ -474,8 +474,11 @@ def confirm_transfer():
     """, (location_id,))
     pending_transfers = cursor.fetchall()
 
+    print("✅ POST request received for confirm_transfer")
+
     if request.method == 'POST':
         transaction_id = int(request.form['transaction_id'])
+        print("➡️ Transaction ID:", transaction_id)
         received_by = session.get('username')
         session_id = session.get('session_id') or request.cookies.get('session')
 
@@ -486,6 +489,7 @@ def confirm_transfer():
             WHERE transaction_id = %s
         """, (transaction_id,))
         items = cursor.fetchall()
+        print("📦 Items to confirm:", items)
 
         # Update inventory and log movement
         for item in items:
@@ -498,6 +502,9 @@ def confirm_transfer():
                 WHERE product_id = %s AND location_id = 1
             """, (pid,))
             hq_stock = cursor.fetchone()
+
+            print("📊 Checking HQ stock for product:", pid, "| Required:", qty, "| HQ has:", hq_stock)
+
 
             if not hq_stock or hq_stock['quantity'] < qty:
                 flash(f"❌ HQ does not have enough stock of Product ID {pid}.", "danger")
