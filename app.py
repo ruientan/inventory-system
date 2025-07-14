@@ -1289,7 +1289,7 @@ def delete_product(product_id):
 # ─────────────────── Full inventory ───────────────────
 @app.route('/export/inventory')
 def export_inventory():
-    conn = get_connection()
+    engine = create_engine(os.getenv("DATABASE_URL"))
     df = pd.read_sql("""
         SELECT 
             p.product_name, 
@@ -1300,58 +1300,63 @@ def export_inventory():
         JOIN products p ON i.product_id = p.product_id
         JOIN locations l ON i.location_id = l.location_id
         ORDER BY l.name, p.product_name
-    """, conn)
-    conn.close()
+    """, engine)
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False)
 
     output.seek(0)
+    filename = f"inventory_{datetime.now().strftime('%d%m%y')}.xlsx"
     return send_file(
         output,
         as_attachment=True,
-        download_name="inventory.xlsx",
+        download_name=filename,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 @app.route('/export/movements')
 def export_movements_excel():
-    conn = get_connection()
+    # Use SQLAlchemy engine for compatibility with Pandas
+    engine = create_engine(os.getenv("DATABASE_URL"))
     df = pd.read_sql("""
         SELECT 
-            sm.movement_id AS id,
-            p.product_name, 
-            fl.name AS from_location, 
-            tl.name AS to_location, 
-            sm.quantity, sm.moved_by, 
-            sm.date_moved
+            sm.movement_id AS ID,
+            p.product_name AS "Product Name", 
+            fl.name AS "From Location", 
+            tl.name AS "To Location", 
+            sm.quantity AS Quantity,
+            sm.moved_by AS "Moved By", 
+            sm.date_moved AS "Date Moved"
         FROM stock_movements sm
         JOIN products p ON sm.product_id = p.product_id
         JOIN locations fl ON sm.from_location = fl.location_id
         JOIN locations tl ON sm.to_location = tl.location_id
         ORDER BY sm.date_moved DESC
-    """, conn)
-    conn.close()
+    """, engine)
 
+    # Optional: Format datetime column
+    df["Date Moved"] = pd.to_datetime(df["Date Moved"]).dt.strftime('%d-%m-%Y %I:%M %p')
+
+    # Write to Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Movements')
+        df.to_excel(writer, index=False, sheet_name='Movement History')
 
     output.seek(0)
+    filename = f"movement_history_{datetime.now().strftime('%d%m%y')}.xlsx"
+
     return Response(
         output.getvalue(),
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={"Content-Disposition": "attachment;filename=movement_history.xlsx"}
+        headers={"Content-Disposition": f"attachment;filename={filename}"}
     )
-
 
 
 @app.route('/export/low_stock')
 def export_low_stock():
     # Use SQLAlchemy engine instead of raw connection for compatibility with pandas
-    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol")
-
+    engine = create_engine(os.getenv("DATABASE_URL"))
     query = """
         SELECT 
             p.product_name, 
