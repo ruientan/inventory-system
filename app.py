@@ -1289,7 +1289,7 @@ def delete_product(product_id):
 # ─────────────────── Full inventory ───────────────────
 @app.route('/export/inventory')
 def export_inventory():
-    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol")
+    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol?sslmode=require")
     df = pd.read_sql("""
         SELECT 
             p.product_name, 
@@ -1318,7 +1318,7 @@ def export_inventory():
 @app.route('/export/movements')
 def export_movements_excel():
     # Use SQLAlchemy engine for compatibility with Pandas
-    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol")
+    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol?sslmode=require")
     df = pd.read_sql("""
         SELECT 
             sm.movement_id AS ID,
@@ -1355,7 +1355,7 @@ def export_movements_excel():
 
 @app.route('/export/low_stock')
 def export_low_stock():
-    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol")
+    engine = create_engine("postgresql://inventory_system_gtol_user:aYf9pFVCC8siUGiTuPmya42MqT1WK3Os@ddpg-d1nn8vadbo4c73eq882g-a.singapore-postgres.render.com:5432/inventory_system_gtol?sslmode=require")
     query = """
         SELECT 
             p.product_name, 
