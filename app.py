@@ -1368,6 +1368,7 @@ def export_low_stock():
         df.to_excel(writer, index=False, sheet_name='Low Stock')
 
     output.seek(0)
+    print(df.head())
     filename = f"low_stock_items_{datetime.now().strftime('%d%m%y')}.xlsx"
     return Response(
         output.getvalue(),
