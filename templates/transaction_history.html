@@ -27,7 +27,7 @@
                 <td><strong>{{ t.invoice_number }}</strong></td>
                 <td>{{ t.from_location }}</td>
                 <td>{{ t.to_location }}</td>
-                <td>{{ t.items|safe }}</td>
+                <td><div style="white-space: pre-line;">{{ t.items|safe }}</div></td>
                 <td>
                     {% if t.status == 'Received' %}
                         ✅ Received

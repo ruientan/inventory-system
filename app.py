@@ -638,7 +638,7 @@ def transaction_history():
             st.status,
             st.initiated_by,
             st.created_at,
-            STRING_AGG(p.product_name || ' (x' || ti.quantity || ')', '<br>') AS items
+            STRING_AGG(p.product_name || ' (x' || ti.quantity || ')', E'\n') AS items
         FROM stock_transactions st
         JOIN locations fl ON st.from_location_id = fl.location_id
         JOIN locations tl ON st.to_location_id = tl.location_id

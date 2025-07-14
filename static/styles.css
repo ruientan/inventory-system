@@ -98,3 +98,10 @@ a:hover {
     box-shadow: 0 0 5px #f8bbe8;
     outline: none;
 }
+
+
+.items-list {
+    white-space: pre-line;
+    line-height: 1.5;
+}
+
