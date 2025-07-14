@@ -16,6 +16,8 @@ from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from datetime import datetime
 from dateutil import parser
+from pytz import timezone
+import pytz 
 
 app = Flask(__name__)
 CORS(app)
@@ -51,6 +53,12 @@ def login_required(f):
     return decorated_function
 
 # ────────── Analytics helper functions ──────────
+def to_sgt(utc_dt):
+    sgt = timezone('Asia/Singapore')
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=pytz.utc)
+    return utc_dt.astimezone(sgt)
+
 def log_audit_action(username, action, product_name=None, location=None, quantity=None,
                      product_id=None, location_id=None, session_id=None, ip=None,
                      invoice_number=None, purpose=None):
@@ -623,6 +631,9 @@ def transaction_history():
                 t['created_at'] = datetime.strptime(t['created_at'], "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 t['created_at'] = parser.parse(t['created_at'])
+
+        t['created_at'] = to_sgt(t['created_at'])
+
    
     cursor.close()
     conn.close()
