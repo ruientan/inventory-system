@@ -389,13 +389,33 @@ def transfer_stock():
         transferred_items = []
 
         for name, qty in zip(product_names, quantities):
+            if not name.strip() or not qty.strip():
+                continue  # Skip if product name or quantity is empty
+
             quantity = int(qty)
             product = next((p for p in products if p['product_name'].lower() == name.lower()), None)
             if not product:
-                continue
+                flash(f"❌ Product '{name}' not found in inventory.", "danger")
+                cursor.close()
+                conn.close()
+                return render_template('transfer.html', products=products, locations=locations)
 
             product_id = product['product_id']
 
+            # Check available HQ stock
+            cursor.execute("""
+                SELECT quantity FROM inventory
+                WHERE product_id = %s AND location_id = %s
+            """, (product_id, from_location))
+            hq_stock = cursor.fetchone()
+
+            if not hq_stock or hq_stock['quantity'] < quantity:
+                flash(f"❌ Not enough stock for {name}. Requested: {quantity}, Available: {hq_stock['quantity'] if hq_stock else 0}", "danger")
+                cursor.close()
+                conn.close()
+                return render_template('transfer.html', products=products, locations=locations)
+
+            # Insert transaction item
             cursor.execute("""
                 INSERT INTO transaction_items (transaction_id, product_id, quantity)
                 VALUES (%s, %s, %s)
