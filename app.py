@@ -931,7 +931,7 @@ def restock():
             INSERT INTO inventory (product_id, location_id, quantity)
             VALUES (%s, %s, %s)
             ON CONFLICT (product_id, location_id) DO UPDATE
-            SET quantity = quantity + EXCLUDED.quantity
+            SET quantity = inventory.quantity + EXCLUDED.quantity
         """, (product_id, location_id, quantity))
 
         # 2. Log movement (from NULL to location) with purpose
