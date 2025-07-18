@@ -4,7 +4,7 @@
     <h2>🔁 Transfer Stock</h2>
 
     {% if invoice_filename %}
-        <a href="{{ url_for('view_invoice', filename=invoice_filename) }}" class="btn btn-outline-primary mt-3">
+        <a href="{{ url_for('view_invoice', filename=invoice_filename) }}" target="_blank" class="btn btn-outline-primary mt-3">
             📄 View / Print Invoice
         </a>
         <a href="{{ url_for('download_invoice', filename=invoice_filename) }}" class="btn btn-outline-info mt-3">
