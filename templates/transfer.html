@@ -3,18 +3,15 @@
 <div class="container mt-4">
     <h2>🔁 Transfer Stock</h2>
 
-    {% if success %}
-        <div class="alert alert-success">{{ success }}</div>
-        {% if invoice_filename %}
-            <a href="{{ url_for('download_invoice', filename=invoice_filename) }}" class="btn btn-outline-info mt-3">📄 Download Invoice</a>
-        {% endif %}
-    {% endif %}
-
     {% if invoice_filename %}
         <a href="{{ url_for('view_invoice', filename=invoice_filename) }}" class="btn btn-outline-primary mt-3">
             📄 View / Print Invoice
         </a>
+        <a href="{{ url_for('download_invoice', filename=invoice_filename) }}" class="btn btn-outline-info mt-3">
+            ⬇️ Download Invoice
+        </a>
     {% endif %}
+
     
     <form method="POST" onsubmit="return validateForm()">
 
@@ -69,6 +66,7 @@
 </div>
 
 <script>
+const hqStock = {{ hq_stock | tojson | safe }};
 function addRow() {
     const row = document.createElement('div');
     row.className = 'product-row row mb-2';
@@ -84,6 +82,15 @@ function addRow() {
         </div>
     `;
     document.getElementById('product-rows').appendChild(row);
+}
+
+function removeRow(button) {
+    const allRows = document.querySelectorAll('.product-row');
+    if (allRows.length > 1) {
+        button.closest('.product-row').remove();
+    } else {
+        alert("⚠️ At least one product row is required.");
+    }
 }
 
 function validateForm() {
@@ -102,6 +109,12 @@ function validateForm() {
 
         if (productNames.includes(name)) {
             alert("⚠️ Duplicate product detected: " + productInputs[i].value + ". Please remove duplicates.");
+            return false;
+        }
+
+        const available = hqStock[name] || 0;
+        if (parseInt(qty) > available) {
+            alert(`❌ Not enough stock for "${productInputs[i].value}". Available: ${available}, Requested: ${qty}`);
             return false;
         }
 
