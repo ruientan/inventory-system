@@ -343,7 +343,8 @@ def initiate_transfer():
 
 @app.route('/view_invoice/<filename>')
 def view_invoice(filename):
-    return send_from_directory('static/invoices', filename, as_attachment=True)
+    # Show in browser (no download)
+    return send_from_directory('static/invoices', filename, as_attachment=False)
 
 # ─────────────────── Stock Transfer ───────────────────
 @app.route('/transfer', methods=['GET', 'POST'])
@@ -597,10 +598,11 @@ def confirm_transfer():
 
 
 # ─────────────────── Download Invoice ───────────────────
+
 @app.route('/download_invoice/<filename>')
 def download_invoice(filename):
-    return send_from_directory('invoices', filename, as_attachment=False)
-
+    # Force download
+    return send_from_directory('static/invoices', filename, as_attachment=True)
 # ─────────────────── HQ Mark Sent Out───────────────────
 @app.route('/mark_sent_out/<int:transaction_id>', methods=['POST'])
 def mark_sent_out(transaction_id):
