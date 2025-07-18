@@ -357,14 +357,24 @@ def transfer_stock():
     cursor.execute("SELECT location_id, name FROM locations")
     locations = cursor.fetchall()
 
+    # Get HQ stock levels
+    cursor.execute("""
+        SELECT p.product_name, i.quantity
+        FROM inventory i
+        JOIN products p ON i.product_id = p.product_id
+        WHERE i.location_id = 1
+    """)
+    hq_inventory = cursor.fetchall()
+    hq_quantity = {item['product_name'].lower(): item['quantity'] for item in hq_inventory}
+
     success = None
     invoice_number = None
     invoice_filename = None
     purpose = "Transfer"
 
     if request.method == 'POST':
-        if session.get('role') not in ['HQ', 'Admin']:
-            flash("❌ Only HQ/Admin can initiate transfers.", "danger")
+        if session.get('role') not in ['HQ']:
+            flash("❌ Only HQ can initiate transfers.", "danger")
             return redirect(url_for('dashboard'))
 
         product_names = request.form.getlist('product_name[]')
@@ -453,15 +463,14 @@ def transfer_stock():
     cursor.close()
     conn.close()
 
-    if invoice_filename:
-        return redirect(url_for('view_invoice', filename=os.path.basename(invoice_filename)))
-    else:
-        return render_template(
-            'transfer.html',
-            products=products,
-            locations=locations,
-            success=success
-        )
+    return render_template(
+        'transfer.html',
+        products=products,
+        locations=locations,
+        success=success,
+        hq_quantity=hq_quantity,
+        invoice_filename=invoice_filename
+    )
 
 
 # ─────────────────── Confirm Transfer ───────────────────
