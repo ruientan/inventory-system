@@ -46,6 +46,9 @@
                             <form action="{{ url_for('mark_sent_out', transaction_id=t.transaction_id) }}" method="post" class="d-inline ms-2">
                                 <button type="submit" class="btn btn-sm btn-outline-primary">🚚 Mark as Sent Out</button>
                             </form>
+                            <form action="{{ url_for('delete_transfer', transaction_id=t.transaction_id) }}" method="post" class="d-inline ms-2" onsubmit="return confirm('Are you sure you want to delete this transfer?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+                            </form>
                         {% endif %}
                     {% elif t.status == 'Pending' %}
                         🕒 Pending
