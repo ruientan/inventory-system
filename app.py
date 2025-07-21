@@ -603,6 +603,30 @@ def confirm_transfer():
 def download_invoice(filename):
     # Force download
     return send_from_directory('static/invoices', filename, as_attachment=True)
+
+# ─────────────────── Delete Transfer───────────────────
+@app.route('/delete_transfer/<int:transaction_id>', methods=['POST'])
+@login_required
+def delete_transfer(transaction_id):
+    conn = get_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    # Only allow deleting transfers that are still preparing
+    cursor.execute("SELECT status FROM stock_transactions WHERE transaction_id = %s", (transaction_id,))
+    result = cursor.fetchone()
+
+    if result and result[0] == 'Preparing':
+        cursor.execute("DELETE FROM transaction_items WHERE transaction_id = %s", (transaction_id,))
+        cursor.execute("DELETE FROM stock_transactions WHERE transaction_id = %s", (transaction_id,))
+        conn.commit()
+        flash("✅ Transfer deleted successfully.", "success")
+    else:
+        flash("❌ Cannot delete. Only 'Preparing' transfers can be deleted.", "danger")
+
+    cursor.close()
+    conn.close()
+    return redirect(url_for('transaction_history')) 
+
 # ─────────────────── HQ Mark Sent Out───────────────────
 @app.route('/mark_sent_out/<int:transaction_id>', methods=['POST'])
 def mark_sent_out(transaction_id):
@@ -610,7 +634,7 @@ def mark_sent_out(transaction_id):
         return "Unauthorized", 403
 
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("UPDATE stock_transactions SET status = 'Sent Out' WHERE transaction_id = %s", (transaction_id,))
     conn.commit()
     cursor.close()
