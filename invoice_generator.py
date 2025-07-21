@@ -72,4 +72,4 @@ def generate_invoice(items, to_location, moved_by):
 
     # ── build pdf ───────────────────────────────────────
     doc.build(elements)
-    return filepath
+    return filename
