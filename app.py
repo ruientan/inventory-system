@@ -615,7 +615,7 @@ def delete_transfer(transaction_id):
     cursor.execute("SELECT status FROM stock_transactions WHERE transaction_id = %s", (transaction_id,))
     result = cursor.fetchone()
 
-    if result and result[0] == 'Preparing':
+    if result and result['status'] == 'Preparing':
         cursor.execute("DELETE FROM transaction_items WHERE transaction_id = %s", (transaction_id,))
         cursor.execute("DELETE FROM stock_transactions WHERE transaction_id = %s", (transaction_id,))
         conn.commit()
