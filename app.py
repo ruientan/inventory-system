@@ -1276,7 +1276,7 @@ def delete_product(product_id):
         return redirect(url_for('dashboard'))
 
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
         # Get product name before deletion
@@ -1292,16 +1292,16 @@ def delete_product(product_id):
 
         # Log the deletion in audit log
         log_audit_action(
-            username=moved_by,
+            username=session.get('username'),
             action="Deleted Product",
-            product_name=name,
+            product_name=product_name,
             product_id=product_id,
-            location=f"{from_location} → {to_location}",
-            location_id=to_location,
-            quantity=quantity,
-            session_id=session_id,
+            location="HQ",
+            location_id=None,
+            quantity=None,
+            session_id=session.get('session_id'),
             ip=request.remote_addr,
-            invoice_number=invoice_number
+            invoice_number=None
         )
 
     except Exception as e:
