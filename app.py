@@ -1089,6 +1089,7 @@ def use_product():
         product_id = int(request.form['product_id'])
         quantity = int(request.form['quantity'])
         purpose = request.form['purpose']
+        staff_name = request.form['staff_name']
         used_by = session['username']
         session_id = session.get('session_id') or request.cookies.get('session')
         invoice_number = None  # No invoice for usage
@@ -1128,8 +1129,8 @@ def use_product():
 
         # Log into usage_log table too
         cursor.execute("""
-            INSERT INTO usage_log (product_id, quantity, purpose, used_by, location)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO usage_log (product_id, quantity, purpose, used_by, location, staff_name)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (product_id, quantity, purpose, used_by, location_name))
 
         conn.commit()
