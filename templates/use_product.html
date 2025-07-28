@@ -10,6 +10,11 @@
 
 <!-- ──────────────── USAGE LOG FORM ──────────────── -->
 <form method="POST" class="row g-3">
+  <div class="col-md-3">
+    <label for="staff_name" class="form-label">Staff Name:</label>
+    <input type="text" class="form-control" id="staff_name" name="staff_name" required>
+  </div>
+
   <div class="col-md-6">
     <label for="product_id" class="form-label">Product:</label>
     <select class="form-select" id="product_id" name="product_id" required>
@@ -55,6 +60,7 @@
         {% for log in mbella_usage %}
         <tr>
           <td>{{ 'U-%04d' | format(log.id) }}</td>
+          <td>{{ log.staff_name }}</td>
           <td>{{ log.product_name }}</td>
           <td>{{ log.quantity }}</td>
           <td>{{ log.purpose }}</td>
@@ -78,6 +84,7 @@
         {% for log in citibella_usage %}
         <tr>
           <td>{{ 'U-%04d' | format(log.id) }}</td>
+          <td>{{ log.staff_name }}</td>
           <td>{{ log.product_name }}</td>
           <td>{{ log.quantity }}</td>
           <td>{{ log.purpose }}</td>
@@ -103,6 +110,7 @@
         {% for log in usage_logs %}
         <tr>
           <td>{{ 'U-%04d' | format(log.id) }}</td>
+          <td>{{ log.staff_name }}</td>
           <td>{{ log.product_name }}</td>
           <td>{{ log.quantity }}</td>
           <td>{{ log.purpose }}</td>
