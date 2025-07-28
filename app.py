@@ -1131,7 +1131,7 @@ def use_product():
         cursor.execute("""
             INSERT INTO usage_log (product_id, quantity, purpose, used_by, location, staff_name)
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (product_id, quantity, purpose, used_by, location_name))
+        """, (product_id, quantity, purpose, used_by, location_name, staff_name))
 
         conn.commit()
         success_msg = f"✅ {quantity} x {product_name} logged as {purpose}"
